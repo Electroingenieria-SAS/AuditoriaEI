@@ -808,45 +808,59 @@ window.verDocumentos = async function(id){
 
         data.forEach(function(doc){
 
-            lista.innerHTML += `
+    lista.innerHTML += `
 
-                <div class="documento-storage">
+        <div class="documento-storage">
 
-                    <div>
+            <div>
 
-                        <strong>
+                <strong>
 
-                            📄 ${doc.nombre_archivo}
+                    📄 ${doc.nombre_archivo}
 
-                        </strong>
+                </strong>
 
-                        <br>
+                <br>
 
-                        ${doc.tipo_archivo}
+                ${doc.tipo_archivo}
 
-                    </div>
+            </div>
 
-                    <div>
+            <div
+                class="acciones-documento"
+            >
 
-                        <button
+                <button
 
-                            class="btn-primary"
+                    class="btn-primary"
 
-                            onclick="descargarDocumento('${doc.ruta_storage}')"
+                    onclick="descargarDocumento('${doc.ruta_storage}')"
 
-                        >
+                >
 
-                            Descargar
+                    📥 Descargar
 
-                        </button>
+                </button>
 
-                    </div>
+                <button
 
-                </div>
+                    class="btn-warning"
 
-            `;
+                    onclick="actualizarDocumento(${doc.id})"
 
-        });
+                >
+
+                    📤 Subir nuevo documento
+
+                </button>
+
+            </div>
+
+        </div>
+
+    `;
+
+});
 
         console.log("Abriendo modal con documentos...");
 
