@@ -1176,6 +1176,183 @@ window.actualizarDocumento = function(id){
 
 };
 
+
+// ============================
+// CAMBIAR DOCUMENTO
+// ============================
+
+const actualizarDocumentoInput =
+document.getElementById(
+    "actualizarDocumentoInput"
+);
+
+if(actualizarDocumentoInput){
+
+    actualizarDocumentoInput.onchange = async function(e){
+
+        try{
+
+            const archivo = e.target.files[0];
+
+            if(!archivo){
+
+                return;
+
+            }
+
+            const documentoId = Number(
+                this.dataset.documentoId
+            );
+
+            //=========================
+            // CONSULTAR DOCUMENTO
+            //=========================
+
+            const { data: documento, error } =
+
+            await window.supabaseClient
+
+            .from("auditoria_documentos")
+
+            .select("*")
+
+            .eq("id", documentoId)
+
+            .single();
+
+            if(error){
+
+                console.error(error);
+
+                alert("No fue posible localizar el documento.");
+
+                return;
+
+            }
+
+            //=========================
+            // ELIMINAR ARCHIVO ANTERIOR
+            //=========================
+
+            await window.supabaseClient
+
+            .storage
+
+            .from("auditorias")
+
+            .remove([documento.ruta_storage]);
+
+            //=========================
+            // NUEVO NOMBRE
+            //=========================
+
+            const nombreStorage =
+
+                Date.now() +
+
+                "_" +
+
+                archivo.name;
+
+            const rutaStorage =
+
+                documento.auditoria_id +
+
+                "/" +
+
+                nombreStorage;
+
+            //=========================
+            // SUBIR NUEVO
+            //=========================
+
+            const subida =
+
+            await window.supabaseClient
+
+            .storage
+
+            .from("auditorias")
+
+            .upload(
+
+                rutaStorage,
+
+                archivo
+
+            );
+
+            if(subida.error){
+
+                console.error(subida.error);
+
+                alert(subida.error.message);
+
+                return;
+
+            }
+
+            //=========================
+            // ACTUALIZAR BASE
+            //=========================
+
+            const actualizar =
+
+            await window.supabaseClient
+
+            .from("auditoria_documentos")
+
+            .update({
+
+                nombre_archivo: archivo.name,
+
+                ruta_storage: rutaStorage,
+
+                tipo_archivo:
+
+                    archivo.name
+
+                    .split(".")
+
+                    .pop()
+
+                    .toUpperCase(),
+
+                tamano: archivo.size
+
+            })
+
+            .eq("id", documentoId);
+
+            if(actualizar.error){
+
+                console.error(actualizar.error);
+
+                alert(actualizar.error.message);
+
+                return;
+
+            }
+
+            alert("Documento actualizado correctamente.");
+
+            await window.verDocumentos(
+                documento.auditoria_id
+            );
+
+        }
+
+        catch(error){
+
+            console.error(error);
+
+        }
+
+        this.value = "";
+
+    };
+
+}
 // ============================
 // VER DETALLE AUDITORÍA
 // ============================
