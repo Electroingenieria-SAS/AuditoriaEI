@@ -1037,7 +1037,7 @@ async function guardarCambiosAuditoria(){
 
         }
 
-        //==============================
+//==============================
 // REEMPLAZAR DOCUMENTO
 //==============================
 
@@ -1045,7 +1045,7 @@ if(archivoNuevo){
 
     // Buscar documento actual
 
-    const { data: documento } =
+    const { data: documento, error: errorDocumento } =
 
     await window.supabaseClient
 
@@ -1056,6 +1056,16 @@ if(archivoNuevo){
     .eq("auditoria_id", id)
 
     .single();
+
+    if(errorDocumento){
+
+        console.error(errorDocumento);
+
+        alert(errorDocumento.message);
+
+        return;
+
+    }
 
     console.log("Documento encontrado:", documento);
 
@@ -1083,7 +1093,9 @@ if(archivoNuevo){
 
         archivoNuevo.name;
 
-        // Subir nuevo archivo
+        //==============================
+        // SUBIR NUEVO ARCHIVO
+        //==============================
 
         const { error: errorSubida } =
 
@@ -1111,7 +1123,19 @@ if(archivoNuevo){
 
         }
 
-        // Actualizar BD
+        console.log("Archivo subido:", rutaNueva);
+
+        //==============================
+        // ACTUALIZAR BASE DE DATOS
+        //==============================
+
+        const {
+
+            data: actualizado,
+
+            error: errorUpdate
+
+        } =
 
         await window.supabaseClient
 
@@ -1129,9 +1153,31 @@ if(archivoNuevo){
 
         })
 
-        .eq("id", documento.id);
+        .eq("id", documento.id)
 
-        // Eliminar archivo viejo
+        .select()
+
+        .single();
+
+        console.log("UPDATE:", actualizado);
+
+        console.log("ERROR UPDATE:", errorUpdate);
+
+        if(errorUpdate){
+
+            console.error(errorUpdate);
+
+            alert(errorUpdate.message);
+
+            return;
+
+        }
+
+        //==============================
+        // ELIMINAR ARCHIVO ANTERIOR
+        //==============================
+
+        const eliminarViejo =
 
         await window.supabaseClient
 
@@ -1145,32 +1191,11 @@ if(archivoNuevo){
 
         ]);
 
-    }
-
-}
-
-        // El documento nuevo lo agregaremos en el siguiente paso
-
-        alert("Información actualizada correctamente.");
-
-        document
-        .getElementById("modalEditarAuditoria")
-        .classList.remove("active");
-
-        await window.cargarAuditorias();
-
-    }
-
-    catch(error){
-
-        console.error(error);
-
-        alert(error.message);
+        console.log("ELIMINAR STORAGE:", eliminarViejo);
 
     }
 
 }
-
 // ============================
 // ELIMINAR AUDITORÍA
 // ============================
