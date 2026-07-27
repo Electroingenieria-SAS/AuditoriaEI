@@ -1268,6 +1268,8 @@ if(actualizarDocumentoInput){
 
             );
 
+            console.log(subida);
+
           console.log("==================================");
 console.log("Documento:", documento);
 console.log("Ruta anterior:", documento.ruta_storage);
