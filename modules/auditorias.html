@@ -459,3 +459,140 @@
     </div>
 
 </div>
+
+  <!-- ==========================================
+     MODAL EDITAR AUDITORÍA
+=========================================== -->
+
+<div id="modalEditarAuditoria" class="modal-documentos">
+
+    <div class="modal-documentos-content modal-editar-auditoria">
+
+        <div class="modal-header">
+
+            <h3>Editar Auditoría</h3>
+
+            <button
+                id="cerrarEditarAuditoria"
+                class="btn-cerrar-modal"
+                type="button">
+                ✕
+            </button>
+
+        </div>
+
+        <input
+            type="hidden"
+            id="editarAuditoriaId"
+        >
+
+        <div class="form-grid">
+
+            <div class="input-group">
+
+                <label>Tipo</label>
+
+                <select id="editarTipo">
+
+                    <option value="Inventario">Inventario</option>
+                    <option value="Recepciones">Recepciones</option>
+                    <option value="Compras">Compras</option>
+                    <option value="Despachos">Despachos</option>
+                    <option value="Ventas">Ventas</option>
+
+                </select>
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Responsable</label>
+
+                <input
+                    id="editarResponsable"
+                    type="text"
+                >
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Nombre Auditoría</label>
+
+                <input
+                    id="editarNombre"
+                    type="text"
+                >
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Fecha</label>
+
+                <input
+                    id="editarFecha"
+                    type="date"
+                >
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Proceso</label>
+
+                <input
+                    id="editarProceso"
+                    type="text"
+                >
+
+            </div>
+
+            <div class="input-group">
+
+                <label>Estado</label>
+
+                <select id="editarEstado">
+
+                    <option value="Pendiente">Pendiente</option>
+                    <option value="En proceso">En proceso</option>
+                    <option value="Finalizada">Finalizada</option>
+
+                </select>
+
+            </div>
+
+        </div>
+
+        <div class="input-group textarea-group">
+
+            <label>Observaciones</label>
+
+            <textarea
+                id="editarObservaciones"
+            ></textarea>
+
+        </div>
+
+        <hr>
+
+        <h4>Documentos</h4>
+
+        <div id="listaEditarDocumentos">
+
+        </div>
+
+        <br>
+
+        <button
+            id="guardarCambiosAuditoria"
+            class="btn-primary"
+            type="button">
+
+            💾 Guardar Cambios
+
+        </button>
+
+    </div>
+
+</div>
