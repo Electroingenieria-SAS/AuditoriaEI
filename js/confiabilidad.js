@@ -1304,23 +1304,17 @@ eventosTabla(){
 
         const ultimo=this.state.analisis[total-1];
 
-        const meta=ultimo.totalEmpresa;
+        const meta=ultimo.total_Empresa;
 
-        const auditados=this.state.analisis.reduce(
+       const auditados = this.state.analisis.reduce(
+    (suma, item) => suma + (Number(item.auditados) || 0),
+    0
+);
 
-            (suma,item)=>suma+item.auditados,
+      const pendientes = meta - auditados;
 
-            0
-
-        );
-
-        const pendientes=Math.max(
-
-            meta-auditados,
-
-            0
-
-        );
+this.dashboard.pendientes.textContent =
+pendientes > 0 ? pendientes : 0;
 
         const promedio=this.state.analisis.reduce(
 
