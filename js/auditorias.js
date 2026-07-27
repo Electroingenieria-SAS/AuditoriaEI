@@ -1350,6 +1350,20 @@ if(errorUpdate){
 
 console.log("Documento actualizado.");
 
+        const { data: verificar } =
+
+await window.supabaseClient
+
+.from("auditoria_documentos")
+
+.select("*")
+
+.eq("id", documentoId)
+
+.single();
+
+console.log("Registro después del UPDATE:", verificar);
+
     }
 
     catch(error){
