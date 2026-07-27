@@ -1097,7 +1097,7 @@ function limpiarDocumentos() {
 }
 
 // ============================
-// DESCARGAR DOCUMENTO (PRUEBA)
+// DESCARGAR DOCUMENTO
 // ============================
 
 window.descargarDocumento = async function(ruta){
@@ -1107,10 +1107,6 @@ window.descargarDocumento = async function(ruta){
         console.log("================================");
         console.log("Ruta recibida:", ruta);
 
-        const carpeta = ruta.split("/")[0];
-
-        console.log("Carpeta:", carpeta);
-
         const { data, error } =
 
         await window.supabaseClient
@@ -1119,10 +1115,27 @@ window.descargarDocumento = async function(ruta){
 
         .from("auditorias")
 
-        .list(carpeta);
+        .createSignedUrl(ruta,60);
 
-        console.log("LISTADO STORAGE:", data);
-        console.log("ERROR STORAGE:", error);
+        console.log("DATA:", data);
+        console.log("ERROR:", error);
+
+        if(error){
+
+            console.error(error);
+
+            alert(error.message);
+
+            return;
+
+        }
+
+        console.log("URL FIRMADA:", data.signedUrl);
+
+        window.open(
+            data.signedUrl,
+            "_blank"
+        );
 
     }
 
@@ -1131,6 +1144,8 @@ window.descargarDocumento = async function(ruta){
         console.error(error);
 
     }
+
+};
 
 };
 const cerrarModalDocumentos =
@@ -1370,6 +1385,28 @@ await window.supabaseClient
 
 console.log("Registro después del UPDATE:", verificar);
 console.log("Error verificación:", errorVerificar);
+
+//==============================
+// RECARGAR DOCUMENTOS
+//==============================
+
+alert("Documento actualizado correctamente.");
+
+await window.verDocumentos(
+    documento.auditoria_id
+);
+
+}
+
+catch(error){
+
+    console.error(error);
+
+    alert(error.message);
+
+}
+
+}
 
 
 
