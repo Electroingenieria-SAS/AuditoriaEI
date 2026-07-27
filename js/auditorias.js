@@ -1196,6 +1196,34 @@ if(archivoNuevo){
     }
 
 }
+
+        //==============================
+// FINALIZAR EDICIÓN
+//==============================
+
+alert("Información actualizada correctamente.");
+
+document
+.getElementById("modalEditarAuditoria")
+.classList.remove("active");
+
+document.getElementById("editarDocumento").value = "";
+
+await window.cargarAuditorias();
+
+return;
+
+}
+
+catch(error){
+
+    console.error(error);
+
+    alert(error.message);
+
+}
+
+}
 // ============================
 // ELIMINAR AUDITORÍA
 // ============================
