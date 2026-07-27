@@ -1097,7 +1097,7 @@ function limpiarDocumentos() {
 }
 
 // ============================
-// RESETEAR MÓDULO
+// DESCARGAR DOCUMENTO (PRUEBA)
 // ============================
 
 window.descargarDocumento = async function(ruta){
@@ -1107,25 +1107,22 @@ window.descargarDocumento = async function(ruta){
         console.log("================================");
         console.log("Ruta recibida:", ruta);
 
-        const { data, error } = await window.supabaseClient
-            .storage
-            .from("auditorias")
-            .createSignedUrl(ruta, 60);
+        const carpeta = ruta.split("/")[0];
 
-        console.log("DATA:", data);
-        console.log("ERROR:", error);
+        console.log("Carpeta:", carpeta);
 
-        if(error){
+        const { data, error } =
 
-            alert(error.message);
+        await window.supabaseClient
 
-            console.error(error);
+        .storage
 
-            return;
+        .from("auditorias")
 
-        }
+        .list(carpeta);
 
-        window.open(data.signedUrl, "_blank");
+        console.log("LISTADO STORAGE:", data);
+        console.log("ERROR STORAGE:", error);
 
     }
 
@@ -1135,7 +1132,7 @@ window.descargarDocumento = async function(ruta){
 
     }
 
-}
+};
 const cerrarModalDocumentos =
 document.getElementById("cerrarModalDocumentos");
 
@@ -1314,9 +1311,14 @@ async function subirNuevoDocumento(documentoId, archivo){
 
         console.log("Archivo subido:", subida);
 
-     //==============================
+ //==============================
 // ACTUALIZAR BASE DE DATOS
 //==============================
+
+console.log("==============");
+console.log("documentoId:", documentoId);
+console.log("archivo.name:", archivo.name);
+console.log("rutaNueva:", rutaNueva);
 
 const { error: errorUpdate } =
 
@@ -1350,7 +1352,11 @@ if(errorUpdate){
 
 console.log("Documento actualizado.");
 
-        const { data: verificar } =
+//==============================
+// VERIFICAR REGISTRO
+//==============================
+
+const { data: verificar, error: errorVerificar } =
 
 await window.supabaseClient
 
@@ -1363,18 +1369,7 @@ await window.supabaseClient
 .single();
 
 console.log("Registro después del UPDATE:", verificar);
-
-    }
-
-    catch(error){
-
-        console.error(error);
-
-        alert(error.message);
-
-    }
-
-}
+console.log("Error verificación:", errorVerificar);
 
 
 
