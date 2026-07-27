@@ -1314,7 +1314,41 @@ async function subirNuevoDocumento(documentoId, archivo){
 
         console.log("Archivo subido:", subida);
 
-        // El siguiente paso será actualizar la base de datos.
+     //==============================
+// ACTUALIZAR BASE DE DATOS
+//==============================
+
+const { error: errorUpdate } =
+
+await window.supabaseClient
+
+.from("auditoria_documentos")
+
+.update({
+
+    nombre_archivo: archivo.name,
+
+    ruta_storage: rutaNueva,
+
+    tipo_archivo: extension,
+
+    tamano: archivo.size
+
+})
+
+.eq("id", documentoId);
+
+if(errorUpdate){
+
+    console.error(errorUpdate);
+
+    alert(errorUpdate.message);
+
+    return;
+
+}
+
+console.log("Documento actualizado.");
 
     }
 
