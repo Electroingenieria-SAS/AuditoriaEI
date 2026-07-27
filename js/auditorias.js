@@ -1,532 +1,517 @@
-// ==========================================
+// ==========================================================
 // AUDITORIAS.JS
-// PARTE 1
-// Inicialización y Registro
-// ==========================================
+// Módulo de Auditorías — arquitectura modular
+//
+// Este archivo se carga una única vez por el loader del
+// dashboard (js/dashboard.js -> cargarModulo), por lo tanto
+// TODO el módulo vive en este único archivo. Para mantenerlo
+// ordenado se divide en bloques claramente delimitados:
+//
+//   1. Limpieza / bootstrap
+//   2. Estado interno del módulo
+//   3. Utilidades genéricas
+//   4. Historial + Notificaciones (capa unificada)
+//   5. Documentos temporales (formulario de creación)
+//   6. Storage: subir / eliminar / reemplazar documentos
+//   7. CRUD Auditorías (crear, listar, render, filtrar)
+//   8. Modal "Ver documentos"
+//   9. Modal "Editar auditoría" (edición integral)
+//  10. Modal "Detalle de auditoría"
+//  11. Eliminar auditoría / editar estado rápido
+//  12. Permisos
+//  13. Inicialización del módulo
+// ==========================================================
 
-// ============================
-// LIMPIAR INTERVALOS
-// ============================
+
+// ==========================================================
+// 1. LIMPIEZA / BOOTSTRAP
+// ==========================================================
+// El módulo puede recargarse varias veces (SPA sin recarga de
+// página), así que se limpian intervalos y funciones globales
+// previas antes de volver a declararlas.
 
 if (window.refreshAuditoriasInterval) {
-
     clearInterval(window.refreshAuditoriasInterval);
-
 }
 
-// ============================
-// LIMPIAR FUNCIONES GLOBALES
-// ============================
+[
+    "renderAuditorias",
+    "eliminarAuditoria",
+    "editarEstado",
+    "iniciarRefreshAuditorias",
+    "verDocumentos",
+    "abrirEditarAuditoria",
+    "verDetalleAuditoria",
+    "descargarDocumento",
+    "cargarAuditorias",
+    "filtrarAuditorias",
+    "eliminarDocumentoTemporal"
+].forEach(function (nombre) {
+    delete window[nombre];
+});
 
-delete window.renderAuditorias;
-delete window.eliminarAuditoria;
-delete window.editarEstado;
-delete window.iniciarRefreshAuditorias;
-delete window.verDocumentos;
 
-// ============================
-// VARIABLES
-// ============================
+// ==========================================================
+// 2. ESTADO INTERNO DEL MÓDULO
+// ==========================================================
 
-const btnGuardarAuditoria =
-document.getElementById("guardarAuditoria");
+const AUDITORIAS_BUCKET = "auditorias";
+const AUDITORIAS_TABLA = "auditorias";
+const DOCUMENTOS_TABLA = "auditoria_documentos";
+const EXTENSIONES_PERMITIDAS = ["pdf", "xlsx", "xls"];
 
-const btnAgregarDocumento =
-document.getElementById("btnAgregarDocumento");
+// Cache de la última consulta (usada por el buscador/filtro)
+let auditoriasCache = [];
 
-const documentoInput =
-document.getElementById("documentoInput");
-
-const listaDocumentos =
-document.getElementById("listaDocumentos");
-
-// ============================
-// DOCUMENTOS TEMPORALES
-// ============================
-
+// Documentos seleccionados en el formulario de CREACIÓN
+// (aún no subidos a Storage)
 let documentosSeleccionados = [];
 
-// ============================
-// CACHE DE AUDITORÍAS
-// ============================
+// Snapshot de la auditoría que se está editando actualmente,
+// se usa para poder comparar "antes" vs "después" y así
+// registrar un historial detallado de los cambios.
+let auditoriaEnEdicion = null;
 
-let auditoriasCache = [];
-// ============================
-// EVENTOS
-// ============================
 
-if(btnGuardarAuditoria){
+// ==========================================================
+// 3. UTILIDADES GENÉRICAS
+// ==========================================================
 
+function obtenerElemento(id) {
+    return document.getElementById(id);
+}
+
+function obtenerValor(id) {
+    const el = obtenerElemento(id);
+    return el ? el.value : "";
+}
+
+function asignarValor(id, valor) {
+    const el = obtenerElemento(id);
+    if (el) el.value = valor ?? "";
+}
+
+function obtenerExtension(nombreArchivo) {
+    return nombreArchivo.split(".").pop().toLowerCase();
+}
+
+function extensionValida(nombreArchivo) {
+    return EXTENSIONES_PERMITIDAS.includes(obtenerExtension(nombreArchivo));
+}
+
+function formatearFecha(fecha) {
+    return fecha ? new Date(fecha).toLocaleDateString("es-CO") : "-";
+}
+
+function claseEstado(estado) {
+    switch (estado) {
+        case "Pendiente": return "estado-pendiente";
+        case "En proceso": return "estado-proceso";
+        case "Finalizada": return "estado-finalizada";
+        default: return "estado-pendiente";
+    }
+}
+
+function abrirModal(id) {
+    const modal = obtenerElemento(id);
+    if (modal) modal.classList.add("active");
+}
+
+function cerrarModal(id) {
+    const modal = obtenerElemento(id);
+    if (modal) modal.classList.remove("active");
+}
+
+// Cierra un modal al hacer click fuera de su contenido y
+// registra el botón "cerrar" (✕), evitando repetir el mismo
+// patrón de eventos en cada modal.
+function configurarCierreModal(modalId, botonCerrarId) {
+    const modal = obtenerElemento(modalId);
+    const boton = obtenerElemento(botonCerrarId);
+
+    if (boton) {
+        boton.onclick = function () {
+            cerrarModal(modalId);
+        };
+    }
+
+    if (modal) {
+        modal.addEventListener("click", function (e) {
+            if (e.target === modal) {
+                cerrarModal(modalId);
+            }
+        });
+    }
+}
+
+function manejarErrorSupabase(error, mensajeUsuario) {
+    console.error(error);
+    window.mostrarNotificacion
+        ? window.mostrarNotificacion("Error", mensajeUsuario || error.message, "error")
+        : alert(mensajeUsuario || error.message);
+}
+
+
+// ==========================================================
+// 4. HISTORIAL + NOTIFICACIONES (capa unificada)
+// ==========================================================
+// Toda acción relevante del módulo pasa por esta única función
+// para no duplicar la lógica de "guardar historial" + "avisar
+// al usuario" en cada flujo (crear, editar, eliminar, etc).
+//
+//   accion       -> "CREAR" | "EDITAR" | "ELIMINAR"
+//   descripcion  -> texto que se guarda en la tabla `historial`
+//   opciones:
+//     mensajeCampana -> texto de la campanita de notificaciones
+//                       (por defecto usa la misma descripción)
+//     popup           -> { titulo, tipo } para mostrar el modal
+//                       global de notificación (success/error/info)
+
+async function registrarEvento(accion, descripcion, opciones = {}) {
+    try {
+        if (typeof window.guardarHistorial === "function") {
+            await window.guardarHistorial(accion, "AUDITORIAS", descripcion);
+        }
+
+        if (typeof window.crearNotificacion === "function") {
+            window.crearNotificacion(opciones.mensajeCampana || descripcion);
+        }
+
+        if (opciones.popup && typeof window.mostrarNotificacion === "function") {
+            window.mostrarNotificacion(
+                opciones.popup.titulo || "Auditorías",
+                descripcion,
+                opciones.popup.tipo || "success"
+            );
+        }
+    } catch (error) {
+        // El historial/notificación nunca debe romper el flujo principal
+        console.error("No fue posible registrar el evento:", error);
+    }
+}
+
+// Genera los mensajes de historial a partir de la comparación
+// entre los datos anteriores y los nuevos de una auditoría.
+function generarCambios(anterior, nuevo, huboDocumentoNuevo) {
+    const cambios = [];
+
+    const campos = [
+        { clave: "tipo", etiqueta: "el tipo" },
+        { clave: "nombre", etiqueta: "el nombre" },
+        { clave: "responsable", etiqueta: "el responsable" },
+        { clave: "proceso", etiqueta: "el proceso" },
+        { clave: "fecha", etiqueta: "la fecha" },
+        { clave: "observaciones", etiqueta: "las observaciones" }
+    ];
+
+    campos.forEach(function (campo) {
+        const valorAnterior = (anterior[campo.clave] || "").toString().trim();
+        const valorNuevo = (nuevo[campo.clave] || "").toString().trim();
+
+        if (valorAnterior !== valorNuevo) {
+            cambios.push(`Se modificó ${campo.etiqueta}.`);
+        }
+    });
+
+    if ((anterior.estado || "") !== (nuevo.estado || "")) {
+        cambios.push(`Se cambió el estado de "${anterior.estado}" a "${nuevo.estado}".`);
+    }
+
+    if (huboDocumentoNuevo) {
+        cambios.push("Se reemplazó el documento adjunto.");
+    }
+
+    return cambios;
+}
+
+
+// ==========================================================
+// 5. DOCUMENTOS TEMPORALES (formulario de creación)
+// ==========================================================
+
+const btnGuardarAuditoria = obtenerElemento("guardarAuditoria");
+const btnAgregarDocumento = obtenerElemento("btnAgregarDocumento");
+const documentoInput = obtenerElemento("documentoInput");
+const listaDocumentos = obtenerElemento("listaDocumentos");
+
+if (btnGuardarAuditoria) {
     btnGuardarAuditoria.onclick = guardarAuditoria;
-
 }
 
-if(btnAgregarDocumento){
-
-    btnAgregarDocumento.onclick = function(){
-
+if (btnAgregarDocumento) {
+    btnAgregarDocumento.onclick = function () {
         documentoInput.click();
-
     };
-
 }
 
-if(documentoInput){
-
+if (documentoInput) {
     documentoInput.onchange = agregarDocumentos;
-
 }
 
-// ======================================
-// AGREGAR DOCUMENTOS
-// ======================================
-
-function agregarDocumentos(e){
-
+function agregarDocumentos(e) {
     const archivos = [...e.target.files];
 
-    archivos.forEach(function(archivo){
-
-        const extension =
-        archivo.name
-        .split(".")
-        .pop()
-        .toLowerCase();
-
-        if(
-
-            extension !== "pdf" &&
-            extension !== "xlsx" &&
-            extension !== "xls"
-
-        ){
-
-            alert(
-
-                "Solo se permiten archivos PDF o Excel."
-
-            );
-
+    archivos.forEach(function (archivo) {
+        if (!extensionValida(archivo.name)) {
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Archivo no válido", "Solo se permiten archivos PDF o Excel.", "warning")
+                : alert("Solo se permiten archivos PDF o Excel.");
             return;
-
         }
 
         documentosSeleccionados.push(archivo);
-
     });
 
     renderDocumentos();
-
     documentoInput.value = "";
-
 }
 
-// ======================================
-// RENDER DOCUMENTOS
-// ======================================
+function renderDocumentos() {
+    if (!listaDocumentos) return;
 
-function renderDocumentos(){
-
-    if(!listaDocumentos){
-
+    if (documentosSeleccionados.length === 0) {
+        listaDocumentos.innerHTML = `
+            <div class="documento-vacio">
+                📄 Ningún documento agregado.
+            </div>
+        `;
         return;
-
     }
 
-    listaDocumentos.innerHTML = "";
+    listaDocumentos.innerHTML = documentosSeleccionados.map(function (doc, index) {
+        const extension = obtenerExtension(doc.name).toUpperCase();
 
-    if(documentosSeleccionados.length===0){
-
-        listaDocumentos.innerHTML=
-
-        `
-        <div class="documento-vacio">
-
-            📄 Ningún documento agregado.
-
-        </div>
-        `;
-
-        return;
-
-    }
-
-    documentosSeleccionados.forEach(function(doc,index){
-
-        const extension =
-        doc.name.split(".").pop().toUpperCase();
-
-        listaDocumentos.innerHTML +=
-
-        `
-        <div class="documento-item">
-
-            <div class="documento-info">
-
-                <div class="documento-nombre">
-
-                    📄 ${doc.name}
-
+        return `
+            <div class="documento-item">
+                <div class="documento-info">
+                    <div class="documento-nombre">📄 ${doc.name}</div>
+                    <div class="documento-tipo">
+                        ${extension} · ${(doc.size / 1024).toFixed(1)} KB
+                    </div>
                 </div>
-
-                <div class="documento-tipo">
-
-                    ${extension}
-
-                    ·
-
-                    ${(doc.size/1024).toFixed(1)} KB
-
+                <div class="documento-acciones">
+                    <button class="btn-eliminar" onclick="eliminarDocumentoTemporal(${index})">🗑</button>
                 </div>
-
             </div>
-
-            <div class="documento-acciones">
-
-                <button
-
-                    class="btn-eliminar"
-
-                    onclick="eliminarDocumentoTemporal(${index})"
-
-                >
-
-                    🗑
-
-                </button>
-
-            </div>
-
-        </div>
-
         `;
-
-    });
-
+    }).join("");
 }
 
-// ======================================
-// ELIMINAR DOCUMENTO TEMPORAL
-// ======================================
-
-window.eliminarDocumentoTemporal=function(index){
-
-    documentosSeleccionados.splice(index,1);
-
+window.eliminarDocumentoTemporal = function (index) {
+    documentosSeleccionados.splice(index, 1);
     renderDocumentos();
+};
 
+function limpiarDocumentos() {
+    documentosSeleccionados = [];
+    renderDocumentos();
 }
 
-async function guardarAuditoria(){
 
-    try{
+// ==========================================================
+// 6. STORAGE: SUBIR / ELIMINAR / REEMPLAZAR DOCUMENTOS
+// ==========================================================
+// Estas funciones son el corazón de la gestión documental y
+// son usadas tanto en la creación como en la edición, evitando
+// duplicar lógica de Storage + tabla `auditoria_documentos`.
 
-        if(
-            !window.tienePermiso(
-                "auditorias",
-                "crear"
-            )
-        ){
+function generarRutaStorage(auditoriaId, nombreArchivo) {
+    const nombreStorage = Date.now() + "_" + nombreArchivo;
+    return `${auditoriaId}/${nombreStorage}`;
+}
 
-            alert("No tiene permisos.");
+// Sube un archivo físico a Storage y crea su registro en BD.
+// Devuelve { error } si algo falla, o { data } si todo sale bien.
+async function subirDocumento(auditoriaId, archivo) {
+    const rutaStorage = generarRutaStorage(auditoriaId, archivo.name);
 
-            return;
+    const subida = await window.supabaseClient
+        .storage
+        .from(AUDITORIAS_BUCKET)
+        .upload(rutaStorage, archivo);
 
-        }
+    if (subida.error) {
+        return { error: subida.error };
+    }
 
-        const tipo =
-        document.getElementById("tipoInput").value;
-
-        const nombre =
-        document.getElementById("nombreInput").value.trim();
-
-        const proceso =
-        document.getElementById("procesoInput").value.trim();
-
-        const responsable =
-        document.getElementById("responsableInput").value.trim();
-
-        const estado =
-        document.getElementById("estadoInput").value;
-
-        const fecha =
-        document.getElementById("fechaInput").value;
-
-        const observaciones =
-        document.getElementById("observacionesInput").value.trim();
-
-        if(
-            !tipo ||
-            !nombre ||
-            !proceso ||
-            !responsable ||
-            !fecha
-        ){
-
-            alert("Complete todos los campos obligatorios.");
-
-            return;
-
-        }
-
-        //==============================
-        // CREAR AUDITORÍA
-        //==============================
-
-        const {
-
-            data,
-
-            error
-
-        } =
-
-        await window.supabaseClient
-
-        .from("auditorias")
-
+    const registro = await window.supabaseClient
+        .from(DOCUMENTOS_TABLA)
         .insert([{
-
-            tipo,
-            nombre,
-            proceso,
-            responsable,
-            estado,
-            fecha,
-            observaciones
-
+            auditoria_id: auditoriaId,
+            nombre_archivo: archivo.name,
+            ruta_storage: rutaStorage,
+            tipo_archivo: obtenerExtension(archivo.name).toUpperCase(),
+            tamano: archivo.size
         }])
-
         .select()
-
         .single();
 
-        if(error){
+    if (registro.error) {
+        return { error: registro.error };
+    }
 
-            console.log(error);
+    return { data: registro.data };
+}
 
-            alert("Error guardando la auditoría.");
+// Obtiene TODOS los documentos vigentes de una auditoría.
+async function obtenerDocumentosDeAuditoria(auditoriaId) {
+    return window.supabaseClient
+        .from(DOCUMENTOS_TABLA)
+        .select("*")
+        .eq("auditoria_id", auditoriaId)
+        .order("id");
+}
 
+// Elimina del Storage y de la tabla todos los documentos
+// indicados. Se usa para garantizar la regla de negocio de
+// "un único documento vigente" antes de subir uno nuevo.
+async function eliminarDocumentos(documentos) {
+    if (!documentos || documentos.length === 0) return;
+
+    const rutas = documentos.map(function (doc) {
+        return doc.ruta_storage;
+    });
+
+    await window.supabaseClient
+        .storage
+        .from(AUDITORIAS_BUCKET)
+        .remove(rutas);
+
+    const ids = documentos.map(function (doc) {
+        return doc.id;
+    });
+
+    await window.supabaseClient
+        .from(DOCUMENTOS_TABLA)
+        .delete()
+        .in("id", ids);
+}
+
+// Reemplaza el/los documento(s) vigentes de una auditoría por
+// uno nuevo: elimina lo anterior (Storage + BD) y sube el
+// archivo nuevo. Devuelve { error } o { data }.
+async function reemplazarDocumento(auditoriaId, archivoNuevo) {
+    const { data: documentosActuales, error: errorConsulta } =
+        await obtenerDocumentosDeAuditoria(auditoriaId);
+
+    if (errorConsulta) {
+        return { error: errorConsulta };
+    }
+
+    const subida = await subirDocumento(auditoriaId, archivoNuevo);
+
+    if (subida.error) {
+        return { error: subida.error };
+    }
+
+    // Solo se elimina lo anterior DESPUÉS de confirmar que el
+    // nuevo documento quedó subido y registrado correctamente,
+    // así nunca se pierde el archivo si algo falla a mitad de camino.
+    await eliminarDocumentos(documentosActuales);
+
+    return { data: subida.data };
+}
+
+
+// ==========================================================
+// 7. CRUD AUDITORÍAS
+// ==========================================================
+
+async function guardarAuditoria() {
+    try {
+        if (!window.tienePermiso("auditorias", "crear")) {
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Sin permisos", "No tiene permisos para crear auditorías.", "warning")
+                : alert("No tiene permisos.");
             return;
+        }
 
+        const tipo = obtenerValor("tipoInput");
+        const nombre = obtenerValor("nombreInput").trim();
+        const proceso = obtenerValor("procesoInput").trim();
+        const responsable = obtenerValor("responsableInput").trim();
+        const estado = obtenerValor("estadoInput");
+        const fecha = obtenerValor("fechaInput");
+        const observaciones = obtenerValor("observacionesInput").trim();
+
+        if (!tipo || !nombre || !proceso || !responsable || !fecha) {
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Datos incompletos", "Complete todos los campos obligatorios.", "warning")
+                : alert("Complete todos los campos obligatorios.");
+            return;
+        }
+
+        const { data, error } = await window.supabaseClient
+            .from(AUDITORIAS_TABLA)
+            .insert([{ tipo, nombre, proceso, responsable, estado, fecha, observaciones }])
+            .select()
+            .single();
+
+        if (error) {
+            manejarErrorSupabase(error, "Error guardando la auditoría.");
+            return;
         }
 
         const auditoriaId = data.id;
 
-        //==============================
-        // SUBIR DOCUMENTOS
-        //==============================
+        for (const archivo of documentosSeleccionados) {
+            const resultado = await subirDocumento(auditoriaId, archivo);
 
-        for(const archivo of documentosSeleccionados){
-
-            const nombreStorage =
-
-                Date.now() +
-
-                "_" +
-
-                archivo.name;
-
-            const rutaStorage =
-
-                auditoriaId +
-
-                "/" +
-
-                nombreStorage;
-
-            const subida =
-
-            await window.supabaseClient
-
-            .storage
-
-            .from("auditorias")
-
-            .upload(
-
-                rutaStorage,
-
-                archivo
-
-            );
-
-          if(subida.error){
-
-    console.error(subida.error);
-
-    alert("Error subiendo archivo:\n\n" + subida.error.message);
-
-    return;
-
-}
-
-            const extension =
-
-            archivo.name
-
-            .split(".")
-
-            .pop()
-
-            .toUpperCase();
-
-            const guardarDocumento =
-
-            await window.supabaseClient
-
-            .from("auditoria_documentos")
-
-            .insert([{
-
-                auditoria_id: auditoriaId,
-
-                nombre_archivo: archivo.name,
-
-                ruta_storage: rutaStorage,
-
-                tipo_archivo: extension,
-
-                tamano: archivo.size
-
-            }]);
-if(guardarDocumento.error){
-
-    console.error(guardarDocumento.error);
-
-    alert("Error guardando documento:\n\n" + guardarDocumento.error.message);
-
-    return;
-
-}
-
+            if (resultado.error) {
+                manejarErrorSupabase(resultado.error, "Error subiendo documento: " + resultado.error.message);
+                return;
+            }
         }
 
-        //==============================
-        // HISTORIAL
-        //==============================
+        await registrarEvento(
+            "CREAR",
+            `Nueva auditoría registrada: ${nombre}.`,
+            { popup: { titulo: "Auditoría creada", tipo: "success" } }
+        );
 
-        if(typeof guardarHistorial === "function"){
-
-            await guardarHistorial(
-
-                "CREAR",
-
-                "AUDITORIAS",
-
-                "Nueva auditoría: " +
-
-                nombre
-
-            );
-
-        }
-
-limpiarFormulario();
-
-await window.cargarAuditorias();
-
-alert("Auditoría registrada correctamente.");
-
+        limpiarFormulario();
+        await window.cargarAuditorias();
+    } catch (error) {
+        manejarErrorSupabase(error, "Ocurrió un error inesperado.");
+    }
 }
 
-catch(error){
-
-    console.log(error);
-
-    alert("Ocurrió un error inesperado.");
-
+function limpiarFormulario() {
+    asignarValor("tipoInput", "");
+    asignarValor("nombreInput", "");
+    asignarValor("procesoInput", "");
+    asignarValor("responsableInput", "");
+    asignarValor("estadoInput", "Pendiente");
+    asignarValor("fechaInput", "");
+    asignarValor("observacionesInput", "");
+    limpiarDocumentos();
 }
 
-}
+window.cargarAuditorias = async function () {
+    try {
+        const { data, error } = await window.supabaseClient
+            .from(AUDITORIAS_TABLA)
+            .select("*")
+            .order("created_at", { ascending: false });
 
-// ======================================
-// LIMPIAR FORMULARIO
-// ======================================
-
-function limpiarFormulario(){
-
-    document.getElementById("tipoInput").value="";
-
-    document.getElementById("nombreInput").value="";
-
-    document.getElementById("procesoInput").value="";
-
-    document.getElementById("responsableInput").value="";
-
-    document.getElementById("estadoInput").value="Pendiente";
-
-    document.getElementById("fechaInput").value="";
-
-    document.getElementById("observacionesInput").value="";
-
-limpiarDocumentos();
-
-}
-// ============================
-// CARGAR AUDITORÍAS
-// ============================
-
-window.cargarAuditorias = async function(){
-
-    try{
-
-        const { data, error } =
-
-        await window.supabaseClient
-
-        .from("auditorias")
-
-        .select("*")
-
-        .order("created_at",{
-
-            ascending:false
-
-        });
-
-        if(error){
-
+        if (error) {
             console.error(error);
-
             return;
-
         }
 
         auditoriasCache = data || [];
-
         window.renderAuditorias(auditoriasCache);
-
-    }
-
-    catch(error){
-
+    } catch (error) {
         console.error(error);
-
     }
-
 };
-// ============================
-// RENDER AUDITORÍAS
-// ============================
 
-window.renderAuditorias = function(lista = auditoriasCache){
+window.renderAuditorias = function (lista = auditoriasCache) {
+    try {
+        const body = obtenerElemento("auditoriasBody");
+        if (!body) return;
 
-    try{
-
-        const body =
-        document.getElementById("auditoriasBody");
-
-        if(!body){
-
-            return;
-
-        }
-
-        body.innerHTML = "";
-
-        if(!lista || lista.length === 0){
-
+        if (!lista || lista.length === 0) {
             body.innerHTML = `
                 <tr>
                     <td colspan="7" style="text-align:center;padding:30px;">
@@ -534,1209 +519,304 @@ window.renderAuditorias = function(lista = auditoriasCache){
                     </td>
                 </tr>
             `;
-
             return;
-
         }
 
-        let html = "";
+        const puedeEditar = window.tienePermiso("auditorias", "editar");
+        const puedeEliminar = window.tienePermiso("auditorias", "eliminar");
 
-        lista.forEach(function(item){
-
-            let estadoClass = "";
-
-            switch(item.estado){
-
-                case "Pendiente":
-
-                    estadoClass = "estado-pendiente";
-
-                    break;
-
-                case "En proceso":
-
-                    estadoClass = "estado-proceso";
-
-                    break;
-
-                case "Finalizada":
-
-                    estadoClass = "estado-finalizada";
-
-                    break;
-
-                default:
-
-                    estadoClass = "estado-pendiente";
-
-            }
-
-          html += `
-<tr>
-
-    <td>${item.tipo}</td>
-
-    <td>${item.nombre}</td>
-
-    <td>${item.responsable}</td>
-
-    <td>
-        <span class="${estadoClass}">
-            ${item.estado}
-        </span>
-    </td>
-
-    <td>
-        ${new Date(item.fecha).toLocaleDateString("es-CO")}
-    </td>
-
-    <td>
-        <div class="acciones-tabla">
-
-            ${window.tienePermiso("auditorias","editar") ? `
-                <button
-                    class="btn-ver"
-                    title="Ver detalle"
-                    onclick="verDetalleAuditoria(${item.id})">
-                    👁️
-                </button>
-
-                <button
-                    class="btn-primary"
-                    title="Documentos"
-                    onclick="verDocumentos(${item.id})">
-                    📁
-                </button>
-
-                <button
-    class="btn-editar"
-    title="Editar"
-    onclick="abrirEditarAuditoria(${item.id})">
-    ✏️
-</button>
-            ` : ""}
-
-            ${window.tienePermiso("auditorias","eliminar") ? `
-                <button
-                    class="btn-eliminar"
-                    title="Eliminar"
-                    onclick="eliminarAuditoria(${item.id})">
-                    🗑️
-                </button>
-            ` : ""}
-
-        </div>
-    </td>
-
-</tr>
-`;
-
-        });
-
-        body.innerHTML = html;
-
-    }
-
-    catch(error){
-
+        body.innerHTML = lista.map(function (item) {
+            return `
+                <tr>
+                    <td>${item.tipo}</td>
+                    <td>${item.nombre}</td>
+                    <td>${item.responsable}</td>
+                    <td><span class="${claseEstado(item.estado)}">${item.estado}</span></td>
+                    <td>${formatearFecha(item.fecha)}</td>
+                    <td>
+                        <div class="acciones-tabla">
+                            ${puedeEditar ? `
+                                <button class="btn-ver" title="Ver detalle" onclick="verDetalleAuditoria(${item.id})">👁️</button>
+                                <button class="btn-primary" title="Documentos" onclick="verDocumentos(${item.id})">📁</button>
+                                <button class="btn-editar" title="Editar" onclick="abrirEditarAuditoria(${item.id})">✏️</button>
+                            ` : ""}
+                            ${puedeEliminar ? `
+                                <button class="btn-eliminar" title="Eliminar" onclick="eliminarAuditoria(${item.id})">🗑️</button>
+                            ` : ""}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+    } catch (error) {
         console.error(error);
-
     }
-
 };
 
-// ============================
-// FILTRAR AUDITORÍAS
-// ============================
+window.filtrarAuditorias = function () {
+    const input = obtenerElemento("buscarAuditoria");
+    if (!input) return;
 
-window.filtrarAuditorias = function(){
+    const texto = input.value.toLowerCase().trim();
 
-    const input =
-    document.getElementById("buscarAuditoria");
-
-    if(!input){
-
-        return;
-
-    }
-
-    const texto =
-    input.value
-    .toLowerCase()
-    .trim();
-
-    if(texto === ""){
-
+    if (texto === "") {
         window.renderAuditorias(auditoriasCache);
-
         return;
-
     }
 
-    const resultado =
+    const campos = ["tipo", "nombre", "proceso", "responsable", "estado", "fecha"];
 
-    auditoriasCache.filter(function(item){
-
-        return (
-
-            String(item.tipo || "")
-            .toLowerCase()
-            .includes(texto)
-
-            ||
-
-            String(item.nombre || "")
-            .toLowerCase()
-            .includes(texto)
-
-            ||
-
-            String(item.proceso || "")
-            .toLowerCase()
-            .includes(texto)
-
-            ||
-
-            String(item.responsable || "")
-            .toLowerCase()
-            .includes(texto)
-
-            ||
-
-            String(item.estado || "")
-            .toLowerCase()
-            .includes(texto)
-
-            ||
-
-            String(item.fecha || "")
-            .toLowerCase()
-            .includes(texto)
-
-        );
-
+    const resultado = auditoriasCache.filter(function (item) {
+        return campos.some(function (campo) {
+            return String(item[campo] || "").toLowerCase().includes(texto);
+        });
     });
 
     window.renderAuditorias(resultado);
-
 };
 
 
-// ============================
-// VER DOCUMENTOS
-// ============================
+// ==========================================================
+// 8. MODAL "VER DOCUMENTOS"
+// ==========================================================
 
-window.verDocumentos = async function(id){
-
-    console.log("========== VER DOCUMENTOS ==========");
-    console.log("ID Auditoría:", id);
-
-    try{
-
-        const modal =
-        document.getElementById("modalDocumentos");
-
-        const lista =
-        document.getElementById("listaDocumentosModal");
-
-        console.log("Modal:", modal);
-        console.log("Lista:", lista);
-
-        if(!modal){
-
-            console.error("No existe #modalDocumentos");
-
-            return;
-
-        }
-
-        if(!lista){
-
-            console.error("No existe #listaDocumentosModal");
-
-            return;
-
-        }
+window.verDocumentos = async function (id) {
+    try {
+        const lista = obtenerElemento("listaDocumentosModal");
+        if (!lista) return;
 
         lista.innerHTML = "";
 
-        const { data, error } =
+        const { data, error } = await obtenerDocumentosDeAuditoria(id);
 
-        await window.supabaseClient
-
-        .from("auditoria_documentos")
-
-        .select("*")
-
-        .eq("auditoria_id", id)
-
-        .order("id");
-
-        console.log("Respuesta Supabase:", data);
-
-        console.log("Error:", error);
-
-        if(error){
-
-            console.error(error);
-
-            alert("Error consultando documentos.");
-
+        if (error) {
+            manejarErrorSupabase(error, "Error consultando documentos.");
             return;
-
         }
 
-        if(!data || data.length === 0){
-
+        if (!data || data.length === 0) {
             lista.innerHTML = `
-
                 <p style="text-align:center;padding:20px;">
-
                     No existen documentos para esta auditoría.
-
                 </p>
-
             `;
-
-            console.log("Abriendo modal sin documentos...");
-
-            modal.classList.add("active");
-
+            abrirModal("modalDocumentos");
             return;
-
         }
 
-        data.forEach(function(doc){
+        lista.innerHTML = data.map(function (doc) {
+            return `
+                <div class="documento-storage">
+                    <div>
+                        <strong>📄 ${doc.nombre_archivo}</strong>
+                        <br>
+                        ${doc.tipo_archivo}
+                    </div>
+                    <div class="acciones-documento">
+                        <button class="btn-primary" onclick="descargarDocumento('${doc.ruta_storage}')">
+                            📥 Descargar
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join("");
 
-    lista.innerHTML += `
-
-        <div class="documento-storage">
-
-            <div>
-
-                <strong>
-
-                    📄 ${doc.nombre_archivo}
-
-                </strong>
-
-                <br>
-
-                ${doc.tipo_archivo}
-
-            </div>
-
-            <div
-                class="acciones-documento"
-            >
-
-                <button
-
-                    class="btn-primary"
-
-                    onclick="descargarDocumento('${doc.ruta_storage}')"
-
-                >
-
-                    📥 Descargar
-
-                </button>
-
-
-            </div>
-
-        </div>
-
-    `;
-
-});
-
-        console.log("Abriendo modal con documentos...");
-
-        modal.classList.add("active");
-
-    }
-
-    catch(error){
-
+        abrirModal("modalDocumentos");
+    } catch (error) {
         console.error("Error inesperado:", error);
-
     }
-
-}
-
-// ============================
-// ABRIR EDITAR AUDITORÍA
-// ============================
-
-window.abrirEditarAuditoria = async function(id){
-
-    try{
-
-        const { data, error } = await window.supabaseClient
-
-        .from("auditorias")
-
-        .select("*")
-
-        .eq("id", id)
-
-        .single();
-
-        if(error){
-
-            console.error(error);
-
-            alert(error.message);
-
-            return;
-
-        }
-
-        document.getElementById("editarAuditoriaId").value = data.id;
-
-        document.getElementById("editarTipo").value = data.tipo;
-
-        document.getElementById("editarNombre").value = data.nombre;
-
-        document.getElementById("editarResponsable").value = data.responsable;
-
-        document.getElementById("editarProceso").value = data.proceso;
-
-        document.getElementById("editarEstado").value = data.estado;
-
-        document.getElementById("editarFecha").value = data.fecha;
-
-        document.getElementById("editarObservaciones").value =
-        data.observaciones || "";
-
-        document
-        .getElementById("modalEditarAuditoria")
-        .classList.add("active");
-
-    }
-
-    catch(error){
-
-        console.error(error);
-
-    }
-
 };
 
-// ============================
-// CERRAR MODAL EDITAR
-// ============================
-
-const cerrarEditarAuditoria =
-document.getElementById("cerrarEditarAuditoria");
-
-if(cerrarEditarAuditoria){
-
-    cerrarEditarAuditoria.onclick = function(){
-
-        document
-
-        .getElementById("modalEditarAuditoria")
-
-        .classList.remove("active");
-
-    };
-
-}
-
-const modalEditar =
-document.getElementById("modalEditarAuditoria");
-
-if(modalEditar){
-
-    modalEditar.onclick = function(e){
-
-        if(e.target===modalEditar){
-
-            modalEditar.classList.remove("active");
-
-        }
-
-    };
-
-}
-
-
-// ============================
-// GUARDAR EDICIÓN AUDITORÍA
-// ============================
-
-const guardarEdicionAuditoria =
-document.getElementById("guardarEdicionAuditoria");
-
-if(guardarEdicionAuditoria){
-
-    guardarEdicionAuditoria.onclick = guardarCambiosAuditoria;
-
-}
-
-async function guardarCambiosAuditoria(){
-
-    try{
-
-        const id =
-        Number(
-            document.getElementById("editarAuditoriaId").value
-        );
-
-        const tipo =
-        document.getElementById("editarTipo").value;
-
-        const nombre =
-        document.getElementById("editarNombre").value;
-
-        const responsable =
-        document.getElementById("editarResponsable").value;
-
-        const proceso =
-        document.getElementById("editarProceso").value;
-
-        const estado =
-        document.getElementById("editarEstado").value;
-
-        const fecha =
-        document.getElementById("editarFecha").value;
-
-        const observaciones =
-        document.getElementById("editarObservaciones").value;
-
-        const archivoNuevo =
-        document.getElementById("editarDocumento").files[0];
-
-        const { error } = await window.supabaseClient
-
-        .from("auditorias")
-
-        .update({
-
-            tipo,
-            nombre,
-            responsable,
-            proceso,
-            estado,
-            fecha,
-            observaciones
-
-        })
-
-        .eq("id", id);
-
-        if(error){
-
-            console.error(error);
-
-            alert(error.message);
-
-            return;
-
-        }
-
-//==============================
-// REEMPLAZAR DOCUMENTO
-//==============================
-
-if(archivoNuevo){
-
-    // Buscar documento actual
-
-    const { data: documento, error: errorDocumento } =
-
-    await window.supabaseClient
-
-    .from("auditoria_documentos")
-
-    .select("*")
-
-    .eq("auditoria_id", id)
-
-    .single();
-
-    if(errorDocumento){
-
-        console.error(errorDocumento);
-
-        alert(errorDocumento.message);
-
-        return;
-
-    }
-
-    console.log("Documento encontrado:", documento);
-
-    if(documento){
-
-        const extension =
-
-        archivoNuevo.name
-
-        .split(".")
-
-        .pop()
-
-        .toUpperCase();
-
-        const rutaNueva =
-
-        id +
-
-        "/" +
-
-        Date.now() +
-
-        "_" +
-
-        archivoNuevo.name;
-
-        //==============================
-        // SUBIR NUEVO ARCHIVO
-        //==============================
-
-        const { error: errorSubida } =
-
-        await window.supabaseClient
-
-        .storage
-
-        .from("auditorias")
-
-        .upload(
-
-            rutaNueva,
-
-            archivoNuevo
-
-        );
-
-        if(errorSubida){
-
-            console.error(errorSubida);
-
-            alert(errorSubida.message);
-
-            return;
-
-        }
-
-        console.log("Archivo subido:", rutaNueva);
-
-        //==============================
-        // ACTUALIZAR BASE DE DATOS
-        //==============================
-
-        const {
-
-            data: actualizado,
-
-            error: errorUpdate
-
-        } =
-
-        await window.supabaseClient
-
-        .from("auditoria_documentos")
-
-        .update({
-
-            nombre_archivo: archivoNuevo.name,
-
-            ruta_storage: rutaNueva,
-
-            tipo_archivo: extension,
-
-            tamano: archivoNuevo.size
-
-        })
-
-        .eq("id", documento.id)
-
-        .select()
-
-        .single();
-
-        console.log("UPDATE:", actualizado);
-
-        console.log("ERROR UPDATE:", errorUpdate);
-
-        if(errorUpdate){
-
-            console.error(errorUpdate);
-
-            alert(errorUpdate.message);
-
-            return;
-
-        }
-
-        //==============================
-        // ELIMINAR ARCHIVO ANTERIOR
-        //==============================
-
-        const eliminarViejo =
-
-        await window.supabaseClient
-
-        .storage
-
-        .from("auditorias")
-
-        .remove([
-
-            documento.ruta_storage
-
-        ]);
-
-        console.log("ELIMINAR STORAGE:", eliminarViejo);
-
-    }
-
-}
-
-        //==============================
-// FINALIZAR EDICIÓN
-//==============================
-
-alert("Información actualizada correctamente.");
-
-document
-.getElementById("modalEditarAuditoria")
-.classList.remove("active");
-
-document.getElementById("editarDocumento").value = "";
-
-await window.cargarAuditorias();
-
-return;
-
-}
-
-catch(error){
-
-    console.error(error);
-
-    alert(error.message);
-
-}
-
-}
-// ============================
-// ELIMINAR AUDITORÍA
-// ============================
-
-window.eliminarAuditoria = async function (id) {
-
+window.descargarDocumento = async function (ruta) {
     try {
-
-        if (
-
-            !window.tienePermiso(
-
-                "auditorias",
-
-                "eliminar"
-
-            )
-
-        ) {
-
-            alert("No tiene permisos.");
-
-            return;
-
-        }
-
-        const confirmar = confirm(
-
-            "¿Eliminar esta auditoría?"
-
-        );
-
-        if (!confirmar) return;
-
-        const { error } = await window.supabaseClient
-
-            .from("auditorias")
-
-            .delete()
-
-            .eq("id", Number(id));
+        const { data, error } = await window.supabaseClient
+            .storage
+            .from(AUDITORIAS_BUCKET)
+            .createSignedUrl(ruta, 60);
 
         if (error) {
-
-            console.log(error);
-
+            manejarErrorSupabase(error, "No fue posible generar el enlace de descarga.");
             return;
-
         }
 
-        if (typeof guardarHistorial === "function") {
-
-            await guardarHistorial(
-
-                "ELIMINAR",
-
-                "AUDITORIAS",
-
-                "Se eliminó una auditoría."
-
-            );
-
-        }
-
-        await window.cargarAuditorias();
-
-    }
-
-    catch (error) {
-
-        console.log(error);
-
-    }
-
-};
-
-// ============================
-// EDITAR ESTADO
-// ============================
-
-window.editarEstado = async function (id) {
-
-    try {
-
-        if (
-
-            !window.tienePermiso(
-
-                "auditorias",
-
-                "editar"
-
-            )
-
-        ) {
-
-            alert("No tiene permisos.");
-
-            return;
-
-        }
-
-        const nuevoEstado = prompt(
-
-            "Nuevo estado:\n\nPendiente\nEn proceso\nFinalizada"
-
-        );
-
-        if (!nuevoEstado) return;
-
-        const { error } = await window.supabaseClient
-
-            .from("auditorias")
-
-            .update({
-
-                estado: nuevoEstado
-
-            })
-
-            .eq("id", Number(id));
-
-        if (error) {
-
-            console.log(error);
-
-            return;
-
-        }
-
-        if (typeof guardarHistorial === "function") {
-
-            await guardarHistorial(
-
-                "EDITAR",
-
-                "AUDITORIAS",
-
-                "Se actualizó el estado de una auditoría."
-
-            );
-
-        }
-
-        await window.cargarAuditorias();
-
-    }
-
-    catch (error) {
-
-        console.log(error);
-
-    }
-
-};
-
-// ============================
-// PERMISOS
-// ============================
-
-function aplicarPermisosAuditorias() {
-
-    if (
-
-        !window.tienePermiso(
-
-            "auditorias",
-
-            "crear"
-
-        )
-
-    ) {
-
-        if (btnGuardarAuditoria) {
-
-            btnGuardarAuditoria.style.display = "none";
-
-        }
-
-    }
-
-}
-
-// ============================
-// CARGAR FECHA ACTUAL
-// ============================
-
-function cargarFechaActual() {
-
-    const fecha =
-
-    document.getElementById("fechaInput");
-
-    if (!fecha) return;
-
-    if (fecha.value === "") {
-
-        const hoy = new Date();
-
-        fecha.value =
-
-        hoy.toISOString().split("T")[0];
-
-    }
-
-}
-
-// ============================
-// LIMPIAR DOCUMENTOS
-// ============================
-
-function limpiarDocumentos() {
-
-    documentosSeleccionados = [];
-
-    renderDocumentos();
-
-}
-
-// ============================
-// DESCARGAR DOCUMENTO
-// ============================
-
-window.descargarDocumento = async function(ruta){
-
-    try{
-
-        console.log("================================");
-        console.log("Ruta recibida:", ruta);
-
-        const { data, error } =
-
-        await window.supabaseClient
-
-        .storage
-
-        .from("auditorias")
-
-        .createSignedUrl(ruta,60);
-
-        console.log("DATA:", data);
-        console.log("ERROR:", error);
-
-        if(error){
-
-            console.error(error);
-
-            alert(error.message);
-
-            return;
-
-        }
-
-        console.log("URL FIRMADA:", data.signedUrl);
-
-        window.open(
-            data.signedUrl,
-            "_blank"
-        );
-
-    }
-
-    catch(error){
-
+        window.open(data.signedUrl, "_blank");
+    } catch (error) {
         console.error(error);
-
     }
-
 };
 
-const cerrarModalDocumentos =
-document.getElementById("cerrarModalDocumentos");
-
-if(cerrarModalDocumentos){
-
-    cerrarModalDocumentos.onclick = function(){
-
-        document
-            .getElementById("modalDocumentos")
-            .classList.remove("active");
-
-    };
-
-}
-
-
-
-// ============================
-// SUBIR NUEVO DOCUMENTO
-// ============================
-
-async function subirNuevoDocumento(documentoId, archivo){
-
-    try{
-
-        //==============================
-        // BUSCAR DOCUMENTO ACTUAL
-        //==============================
-
-        const { data: documento, error } =
-
-        await window.supabaseClient
-
-        .from("auditoria_documentos")
-
-        .select("*")
-
-        .eq("id", documentoId)
-
-        .single();
-
-        if(error){
-
-            console.error(error);
-
-            alert(error.message);
-
-            return;
-
-        }
-
-        //==============================
-        // GENERAR NUEVA RUTA
-        //==============================
-
-        const extension =
-
-        archivo.name.split(".").pop().toUpperCase();
-
-        const nombreStorage =
-
-        Date.now() +
-
-        "_" +
-
-        archivo.name;
-
-        const rutaNueva =
-
-        documento.auditoria_id +
-
-        "/" +
-
-        nombreStorage;
-
-        //==============================
-        // SUBIR ARCHIVO
-        //==============================
-
-        const { data: subida, error: errorSubida } =
-
-        await window.supabaseClient
-
-        .storage
-
-        .from("auditorias")
-
-        .upload(
-
-            rutaNueva,
-
-            archivo,
-
-            {
-
-                upsert:false
-
-            }
-
-        );
-
-        if(errorSubida){
-
-            console.error(errorSubida);
-
-            alert(errorSubida.message);
-
-            return;
-
-        }
-
-        console.log("Archivo subido:", subida);
-
- //==============================
-// ACTUALIZAR BASE DE DATOS
-//==============================
-
-console.log("==============");
-console.log("documentoId:", documentoId);
-console.log("archivo.name:", archivo.name);
-console.log("rutaNueva:", rutaNueva);
-
-const { error: errorUpdate } =
-
-await window.supabaseClient
-
-.from("auditoria_documentos")
-
-.update({
-
-    nombre_archivo: archivo.name,
-
-    ruta_storage: rutaNueva,
-
-    tipo_archivo: extension,
-
-    tamano: archivo.size
-
-})
-
-.eq("id", documentoId);
-
-if(errorUpdate){
-
-    console.error(errorUpdate);
-
-    alert(errorUpdate.message);
-
-    return;
-
-}
-
-console.log("Documento actualizado.");
-
-//==============================
-// VERIFICAR REGISTRO
-//==============================
-
-const { data: verificar, error: errorVerificar } =
-
-await window.supabaseClient
-
-.from("auditoria_documentos")
-
-.select("*")
-
-.eq("id", documentoId)
-
-.single();
-
-console.log("Registro después del UPDATE:", verificar);
-console.log("Error verificación:", errorVerificar);
-
-//==============================
-// RECARGAR DOCUMENTOS
-//==============================
-
-alert("Documento actualizado correctamente.");
-
-await window.verDocumentos(
-    documento.auditoria_id
-);
-
-}
-
-catch(error){
-
-    console.error(error);
-
-    alert(error.message);
-
-}
-
-}
-
-
-
-// ============================
-// VER DETALLE AUDITORÍA
-// ============================
-
-window.verDetalleAuditoria = async function(id){
-
-    try{
-
-        const modal =
-        document.getElementById("modalDetalleAuditoria");
-
-        if(!modal){
-
-            console.error("No existe #modalDetalleAuditoria");
-
-            return;
-
-        }
-
+configurarCierreModal("modalDocumentos", "cerrarModalDocumentos");
+
+
+// ==========================================================
+// 9. MODAL "EDITAR AUDITORÍA" (edición integral)
+// ==========================================================
+// Único punto de edición: datos generales + documento.
+// Flujo al guardar (ver guardarCambiosAuditoria):
+//   1. Actualizar tabla `auditorias`
+//   2. Si hay archivo nuevo -> reemplazarDocumento()
+//   3. Registrar historial (granular, por campo modificado)
+//   4. Notificar
+//   5. Cerrar modal + recargar tabla
+
+window.abrirEditarAuditoria = async function (id) {
+    try {
         const { data, error } = await window.supabaseClient
-
-            .from("auditorias")
-
+            .from(AUDITORIAS_TABLA)
             .select("*")
-
             .eq("id", id)
-
             .single();
 
-        if(error){
-
-            console.error(error);
-
-            alert("No fue posible cargar la auditoría.");
-
+        if (error) {
+            manejarErrorSupabase(error, "No fue posible cargar la auditoría.");
             return;
-
         }
 
-        const setText = function(elId, valor){
+        // Se guarda el estado original para poder comparar
+        // después y construir el historial de cambios.
+        auditoriaEnEdicion = data;
 
-            const el = document.getElementById(elId);
+        asignarValor("editarAuditoriaId", data.id);
+        asignarValor("editarTipo", data.tipo);
+        asignarValor("editarNombre", data.nombre);
+        asignarValor("editarResponsable", data.responsable);
+        asignarValor("editarProceso", data.proceso);
+        asignarValor("editarEstado", data.estado);
+        asignarValor("editarFecha", data.fecha);
+        asignarValor("editarObservaciones", data.observaciones || "");
 
-            if(el) el.textContent = valor;
+        const inputDocumento = obtenerElemento("editarDocumento");
+        if (inputDocumento) inputDocumento.value = "";
 
+        abrirModal("modalEditarAuditoria");
+    } catch (error) {
+        console.error(error);
+    }
+};
+
+configurarCierreModal("modalEditarAuditoria", "cerrarEditarAuditoria");
+
+const guardarEdicionAuditoria = obtenerElemento("guardarEdicionAuditoria");
+if (guardarEdicionAuditoria) {
+    guardarEdicionAuditoria.onclick = guardarCambiosAuditoria;
+}
+
+async function guardarCambiosAuditoria() {
+    if (!auditoriaEnEdicion) return;
+
+    // Evita doble click mientras se procesa la edición
+    if (guardarEdicionAuditoria) guardarEdicionAuditoria.disabled = true;
+
+    try {
+        const id = Number(obtenerValor("editarAuditoriaId"));
+
+        const datosNuevos = {
+            tipo: obtenerValor("editarTipo"),
+            nombre: obtenerValor("editarNombre").trim(),
+            responsable: obtenerValor("editarResponsable").trim(),
+            proceso: obtenerValor("editarProceso").trim(),
+            estado: obtenerValor("editarEstado"),
+            fecha: obtenerValor("editarFecha"),
+            observaciones: obtenerValor("editarObservaciones").trim()
+        };
+
+        if (!datosNuevos.tipo || !datosNuevos.nombre || !datosNuevos.proceso ||
+            !datosNuevos.responsable || !datosNuevos.fecha) {
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Datos incompletos", "Complete todos los campos obligatorios.", "warning")
+                : alert("Complete todos los campos obligatorios.");
+            return;
+        }
+
+        const inputDocumento = obtenerElemento("editarDocumento");
+        const archivoNuevo = inputDocumento && inputDocumento.files[0];
+
+        if (archivoNuevo && !extensionValida(archivoNuevo.name)) {
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Archivo no válido", "Solo se permiten archivos PDF o Excel.", "warning")
+                : alert("Solo se permiten archivos PDF o Excel.");
+            return;
+        }
+
+        // 1. Actualizar tabla `auditorias`
+        const { error } = await window.supabaseClient
+            .from(AUDITORIAS_TABLA)
+            .update(datosNuevos)
+            .eq("id", id);
+
+        if (error) {
+            manejarErrorSupabase(error, "Error actualizando la auditoría.");
+            return;
+        }
+
+        // 2. Reemplazar documento si el usuario seleccionó uno nuevo
+        if (archivoNuevo) {
+            const resultado = await reemplazarDocumento(id, archivoNuevo);
+
+            if (resultado.error) {
+                manejarErrorSupabase(resultado.error, "Error reemplazando el documento: " + resultado.error.message);
+                return;
+            }
+        }
+
+        // 3 y 4. Historial + notificaciones (granular por campo)
+        const cambios = generarCambios(auditoriaEnEdicion, datosNuevos, Boolean(archivoNuevo));
+
+        if (cambios.length === 0) {
+            await registrarEvento(
+                "EDITAR",
+                `Se editó la auditoría "${datosNuevos.nombre}" sin cambios detectados.`,
+                { popup: { titulo: "Auditoría actualizada", tipo: "info" } }
+            );
+        } else {
+            for (const cambio of cambios) {
+                await registrarEvento("EDITAR", `${cambio} (Auditoría: ${datosNuevos.nombre})`);
+            }
+
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Auditoría actualizada", "Los cambios se guardaron correctamente.", "success")
+                : alert("Información actualizada correctamente.");
+        }
+
+        // 5. Cerrar modal + recargar tabla
+        cerrarModal("modalEditarAuditoria");
+        if (inputDocumento) inputDocumento.value = "";
+        auditoriaEnEdicion = null;
+
+        await window.cargarAuditorias();
+    } catch (error) {
+        manejarErrorSupabase(error, "Ocurrió un error inesperado editando la auditoría.");
+    } finally {
+        if (guardarEdicionAuditoria) guardarEdicionAuditoria.disabled = false;
+    }
+}
+
+
+// ==========================================================
+// 10. MODAL "DETALLE DE AUDITORÍA"
+// ==========================================================
+
+window.verDetalleAuditoria = async function (id) {
+    try {
+        if (!obtenerElemento("modalDetalleAuditoria")) {
+            console.error("No existe #modalDetalleAuditoria");
+            return;
+        }
+
+        const { data, error } = await window.supabaseClient
+            .from(AUDITORIAS_TABLA)
+            .select("*")
+            .eq("id", id)
+            .single();
+
+        if (error) {
+            manejarErrorSupabase(error, "No fue posible cargar la auditoría.");
+            return;
+        }
+
+        const setText = function (elId, valor) {
+            const el = obtenerElemento(elId);
+            if (el) el.textContent = valor;
         };
 
         setText("detalleTipo", data.tipo || "-");
@@ -1744,158 +824,163 @@ window.verDetalleAuditoria = async function(id){
         setText("detalleNombre", data.nombre || "-");
         setText("detalleResponsable", data.responsable || "-");
         setText("detalleProceso", data.proceso || "-");
+        setText("detalleFecha", formatearFecha(data.fecha));
 
-        setText(
-            "detalleFecha",
-            data.fecha ? new Date(data.fecha).toLocaleDateString("es-CO") : "-"
-        );
-
-        const estadoEl = document.getElementById("detalleEstado");
-
-        if(estadoEl){
-
+        const estadoEl = obtenerElemento("detalleEstado");
+        if (estadoEl) {
             estadoEl.className = "";
-
-            switch(data.estado){
-
-                case "Pendiente":
-                    estadoEl.classList.add("estado-pendiente");
-                    break;
-
-                case "En proceso":
-                    estadoEl.classList.add("estado-proceso");
-                    break;
-
-                case "Finalizada":
-                    estadoEl.classList.add("estado-finalizada");
-                    break;
-
-                default:
-                    estadoEl.classList.add("estado-pendiente");
-
-            }
-
+            estadoEl.classList.add(claseEstado(data.estado));
         }
 
-        const observacionesEl =
-        document.getElementById("detalleObservaciones");
-
-        if(observacionesEl){
-
+        const observacionesEl = obtenerElemento("detalleObservaciones");
+        if (observacionesEl) {
             observacionesEl.textContent =
-            data.observaciones && data.observaciones.trim() !== ""
-                ? data.observaciones
-                : "Sin observaciones registradas.";
-
+                data.observaciones && data.observaciones.trim() !== ""
+                    ? data.observaciones
+                    : "Sin observaciones registradas.";
         }
 
-        const docsEl =
-        document.getElementById("detalleDocumentos");
-
-        if(docsEl){
-
+        const docsEl = obtenerElemento("detalleDocumentos");
+        if (docsEl) {
             docsEl.innerHTML = `
                 <div class="detalle-vacio">
                     Abra "Documentos" en la tabla para ver los archivos adjuntos.
                 </div>
             `;
-
         }
 
-        modal.classList.add("active");
-
+        abrirModal("modalDetalleAuditoria");
+    } catch (error) {
+        manejarErrorSupabase(error, "Ocurrió un error.");
     }
-
-    catch(error){
-
-        console.error(error);
-
-        alert("Ocurrió un error.");
-
-    }
-
 };
 
-const cerrarDetalleAuditoria =
-document.getElementById("cerrarDetalleAuditoria");
+configurarCierreModal("modalDetalleAuditoria", "cerrarDetalleAuditoria");
 
-if(cerrarDetalleAuditoria){
 
-    cerrarDetalleAuditoria.onclick = function(){
+// ==========================================================
+// 11. ELIMINAR AUDITORÍA / EDITAR ESTADO RÁPIDO
+// ==========================================================
 
-        document
-            .getElementById("modalDetalleAuditoria")
-            .classList.remove("active");
-
-    };
-
-}
-
-const modalDetalleAuditoriaEl =
-document.getElementById("modalDetalleAuditoria");
-
-if(modalDetalleAuditoriaEl){
-
-    modalDetalleAuditoriaEl.addEventListener("click", function(e){
-
-        if(e.target === modalDetalleAuditoriaEl){
-
-            modalDetalleAuditoriaEl.classList.remove("active");
-
+window.eliminarAuditoria = async function (id) {
+    try {
+        if (!window.tienePermiso("auditorias", "eliminar")) {
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Sin permisos", "No tiene permisos para eliminar auditorías.", "warning")
+                : alert("No tiene permisos.");
+            return;
         }
 
-    });
+        const confirmar = confirm("¿Eliminar esta auditoría? Esta acción también eliminará sus documentos adjuntos.");
+        if (!confirmar) return;
 
-}
-// ==========================================
-// INICIALIZAR MÓDULO
-// ==========================================
+        // Se eliminan primero los documentos (Storage + BD) para
+        // no dejar archivos huérfanos en el bucket.
+        const { data: documentos } = await obtenerDocumentosDeAuditoria(id);
+        await eliminarDocumentos(documentos);
 
-window.iniciarRefreshAuditorias = function(){
+        const { error } = await window.supabaseClient
+            .from(AUDITORIAS_TABLA)
+            .delete()
+            .eq("id", Number(id));
 
-    if(window.refreshAuditoriasInterval){
-
-        clearInterval(window.refreshAuditoriasInterval);
-
-    }
-
-    window.refreshAuditoriasInterval = setInterval(function(){
-
-        if(document.getElementById("auditoriasBody")){
-
-            window.cargarAuditorias();
-
+        if (error) {
+            manejarErrorSupabase(error, "Error eliminando la auditoría.");
+            return;
         }
 
-    },5000);
-
-};
-
-(function(){
-
-    aplicarPermisosAuditorias();
-
-    cargarFechaActual();
-
-    renderDocumentos();
-
-    window.cargarAuditorias();
-
-    window.iniciarRefreshAuditorias();
-
-    const buscarAuditoria =
-    document.getElementById("buscarAuditoria");
-
-    if(buscarAuditoria){
-
-        buscarAuditoria.addEventListener(
-
-            "input",
-
-            window.filtrarAuditorias
-
+        await registrarEvento(
+            "ELIMINAR",
+            "Se eliminó una auditoría.",
+            { popup: { titulo: "Auditoría eliminada", tipo: "success" } }
         );
 
+        await window.cargarAuditorias();
+    } catch (error) {
+        manejarErrorSupabase(error, "Ocurrió un error eliminando la auditoría.");
+    }
+};
+
+// Atajo rápido para cambiar solo el estado desde la tabla,
+// sin abrir el modal completo de edición.
+window.editarEstado = async function (id) {
+    try {
+        if (!window.tienePermiso("auditorias", "editar")) {
+            window.mostrarNotificacion
+                ? window.mostrarNotificacion("Sin permisos", "No tiene permisos para editar auditorías.", "warning")
+                : alert("No tiene permisos.");
+            return;
+        }
+
+        const nuevoEstado = prompt("Nuevo estado:\n\nPendiente\nEn proceso\nFinalizada");
+        if (!nuevoEstado) return;
+
+        const { error } = await window.supabaseClient
+            .from(AUDITORIAS_TABLA)
+            .update({ estado: nuevoEstado })
+            .eq("id", Number(id));
+
+        if (error) {
+            manejarErrorSupabase(error, "Error actualizando el estado.");
+            return;
+        }
+
+        await registrarEvento(
+            "EDITAR",
+            `Se cambió el estado de la auditoría a "${nuevoEstado}".`,
+            { popup: { titulo: "Estado actualizado", tipo: "success" } }
+        );
+
+        await window.cargarAuditorias();
+    } catch (error) {
+        manejarErrorSupabase(error, "Ocurrió un error actualizando el estado.");
+    }
+};
+
+
+// ==========================================================
+// 12. PERMISOS
+// ==========================================================
+
+function aplicarPermisosAuditorias() {
+    if (!window.tienePermiso("auditorias", "crear") && btnGuardarAuditoria) {
+        btnGuardarAuditoria.style.display = "none";
+    }
+}
+
+
+// ==========================================================
+// 13. INICIALIZACIÓN DEL MÓDULO
+// ==========================================================
+
+function cargarFechaActual() {
+    const fecha = obtenerElemento("fechaInput");
+    if (fecha && fecha.value === "") {
+        fecha.value = new Date().toISOString().split("T")[0];
+    }
+}
+
+window.iniciarRefreshAuditorias = function () {
+    if (window.refreshAuditoriasInterval) {
+        clearInterval(window.refreshAuditoriasInterval);
     }
 
+    window.refreshAuditoriasInterval = setInterval(function () {
+        if (obtenerElemento("auditoriasBody")) {
+            window.cargarAuditorias();
+        }
+    }, 5000);
+};
+
+(function inicializarModuloAuditorias() {
+    aplicarPermisosAuditorias();
+    cargarFechaActual();
+    renderDocumentos();
+    window.cargarAuditorias();
+    window.iniciarRefreshAuditorias();
+
+    const buscarAuditoria = obtenerElemento("buscarAuditoria");
+    if (buscarAuditoria) {
+        buscarAuditoria.addEventListener("input", window.filtrarAuditorias);
+    }
 })();
