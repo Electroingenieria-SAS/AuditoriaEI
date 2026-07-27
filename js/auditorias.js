@@ -1057,6 +1057,8 @@ if(archivoNuevo){
 
     .single();
 
+    console.log("Documento encontrado:", documento);
+
     if(documento){
 
         const extension =
@@ -1455,72 +1457,7 @@ if(cerrarModalDocumentos){
 
 }
 
-// ============================
-// SELECCIONAR DOCUMENTO NUEVO
-// ============================
 
-window.actualizarDocumento = function(documentoId){
-
-    const input = document.getElementById(
-        "actualizarDocumentoInput"
-    );
-
-    if(!input){
-
-        alert(
-            "No se encontró el selector de archivos."
-        );
-
-        return;
-
-    }
-
-    input.value = "";
-
-    input.dataset.documentoId = documentoId;
-
-    input.click();
-
-};
-
-// ============================
-// CAMBIO DE DOCUMENTO
-// ============================
-
-const actualizarDocumentoInput =
-document.getElementById(
-    "actualizarDocumentoInput"
-);
-
-if(actualizarDocumentoInput){
-
-    actualizarDocumentoInput.onchange = async function(){
-
-        const archivo = this.files[0];
-
-        if(!archivo){
-
-            return;
-
-        }
-
-        const documentoId = Number(
-            this.dataset.documentoId
-        );
-
-        await subirNuevoDocumento(
-
-            documentoId,
-
-            archivo
-
-        );
-
-        this.value = "";
-
-    };
-
-}
 
 // ============================
 // SUBIR NUEVO DOCUMENTO
