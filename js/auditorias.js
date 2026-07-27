@@ -609,11 +609,11 @@ window.renderAuditorias = function(lista = auditoriasCache){
                 </button>
 
                 <button
-                    class="btn-editar"
-                    title="Editar"
-                    onclick="editarEstado(${item.id})">
-                    ✏️
-                </button>
+    class="btn-editar"
+    title="Editar"
+    onclick="abrirEditarAuditoria(${item.id})">
+    ✏️
+</button>
             ` : ""}
 
             ${window.tienePermiso("auditorias","eliminar") ? `
@@ -865,6 +865,64 @@ window.verDocumentos = async function(id){
 
 }
 
+window.abrirEditarAuditoria = async function(id){
+
+    try{
+
+        const { data, error } = await window.supabaseClient
+
+            .from("auditorias")
+
+            .select("*")
+
+            .eq("id", id)
+
+            .single();
+
+        if(error){
+
+            console.error(error);
+
+            return;
+
+        }
+
+        window.auditoriaEditando = data.id;
+
+        document.getElementById("editarTipo").value =
+        data.tipo;
+
+        document.getElementById("editarNombre").value =
+        data.nombre;
+
+        document.getElementById("editarResponsable").value =
+        data.responsable;
+
+        document.getElementById("editarProceso").value =
+        data.proceso;
+
+        document.getElementById("editarEstado").value =
+        data.estado;
+
+        document.getElementById("editarFecha").value =
+        data.fecha;
+
+        document.getElementById("editarObservaciones").value =
+        data.observaciones || "";
+
+        document
+        .getElementById("modalEditarAuditoria")
+        .classList.add("active");
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+    }
+
+}
 // ============================
 // ELIMINAR AUDITORÍA
 // ============================
