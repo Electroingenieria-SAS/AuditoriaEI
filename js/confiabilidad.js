@@ -1038,9 +1038,11 @@ async cargarAnalisis(){
 
     }
 
-    this.state.analisis = data;
+    this.state.analisis = data || [];
 
     this.renderHistorial();
+
+    this.actualizarResumen();
 
 }
 
@@ -1304,7 +1306,7 @@ eventosTabla(){
 
         const ultimo=this.state.analisis[total-1];
 
-        const meta=ultimo.total_Empresa;
+        const meta=ultimo.total_empresa;
 
        const auditados = this.state.analisis.reduce(
     (suma, item) => suma + (Number(item.auditados) || 0),
@@ -1512,16 +1514,16 @@ verAnalisis(indice){
     this.form.anio.value = analisis.anio;
     this.form.mes.value = analisis.mes;
     this.form.nombre.value = analisis.nombre;
-    this.form.total.value = analisis.totalEmpresa;
+    this.form.total.value = analisis.total_empresa;
     this.form.programados.value = analisis.programados;
     this.form.auditados.value = analisis.auditados;
     this.form.correctos.value = analisis.correctos;
     this.form.sobrantes.value = analisis.sobrantes;
     this.form.faltantes.value = analisis.faltantes;
-    this.form.valorInventario.value = analisis.valorInventario;
-    this.form.valorAuditado.value = analisis.valorAuditado;
-    this.form.valorDiferencias.value = analisis.valorDiferencias;
-    this.form.valorAjustes.value = analisis.valorAjustes;
+    this.form.valorInventario.value = analisis.valor_inventario;
+    this.form.valorAuditado.value = analisis.valor_auditado;
+    this.form.valorDiferencias.value = analisis.valor_diferencias;
+    this.form.valorAjustes.value = analisis.valor_ajustes;
 
     this.actualizarPreview();
 
