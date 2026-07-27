@@ -865,47 +865,47 @@ window.verDocumentos = async function(id){
 
 }
 
+// ============================
+// ABRIR EDITAR AUDITORÍA
+// ============================
+
 window.abrirEditarAuditoria = async function(id){
 
     try{
 
         const { data, error } = await window.supabaseClient
 
-            .from("auditorias")
+        .from("auditorias")
 
-            .select("*")
+        .select("*")
 
-            .eq("id", id)
+        .eq("id", id)
 
-            .single();
+        .single();
 
         if(error){
 
             console.error(error);
 
+            alert(error.message);
+
             return;
 
         }
 
-        window.auditoriaEditando = data.id;
+        document.getElementById("editarAuditoriaId").value = data.id;
 
-        document.getElementById("editarTipo").value =
-        data.tipo;
+        document.getElementById("editarTipo").value = data.tipo;
 
-        document.getElementById("editarNombre").value =
-        data.nombre;
+        document.getElementById("editarNombre").value = data.nombre;
 
-        document.getElementById("editarResponsable").value =
-        data.responsable;
+        document.getElementById("editarResponsable").value = data.responsable;
 
-        document.getElementById("editarProceso").value =
-        data.proceso;
+        document.getElementById("editarProceso").value = data.proceso;
 
-        document.getElementById("editarEstado").value =
-        data.estado;
+        document.getElementById("editarEstado").value = data.estado;
 
-        document.getElementById("editarFecha").value =
-        data.fecha;
+        document.getElementById("editarFecha").value = data.fecha;
 
         document.getElementById("editarObservaciones").value =
         data.observaciones || "";
@@ -922,7 +922,143 @@ window.abrirEditarAuditoria = async function(id){
 
     }
 
+};
+
+// ============================
+// CERRAR MODAL EDITAR
+// ============================
+
+const cerrarEditarAuditoria =
+document.getElementById("cerrarEditarAuditoria");
+
+if(cerrarEditarAuditoria){
+
+    cerrarEditarAuditoria.onclick = function(){
+
+        document
+
+        .getElementById("modalEditarAuditoria")
+
+        .classList.remove("active");
+
+    };
+
 }
+
+const modalEditar =
+document.getElementById("modalEditarAuditoria");
+
+if(modalEditar){
+
+    modalEditar.onclick = function(e){
+
+        if(e.target===modalEditar){
+
+            modalEditar.classList.remove("active");
+
+        }
+
+    };
+
+}
+
+
+// ============================
+// GUARDAR EDICIÓN AUDITORÍA
+// ============================
+
+const guardarEdicionAuditoria =
+document.getElementById("guardarEdicionAuditoria");
+
+if(guardarEdicionAuditoria){
+
+    guardarEdicionAuditoria.onclick = guardarCambiosAuditoria;
+
+}
+
+async function guardarCambiosAuditoria(){
+
+    try{
+
+        const id =
+        Number(
+            document.getElementById("editarAuditoriaId").value
+        );
+
+        const tipo =
+        document.getElementById("editarTipo").value;
+
+        const nombre =
+        document.getElementById("editarNombre").value;
+
+        const responsable =
+        document.getElementById("editarResponsable").value;
+
+        const proceso =
+        document.getElementById("editarProceso").value;
+
+        const estado =
+        document.getElementById("editarEstado").value;
+
+        const fecha =
+        document.getElementById("editarFecha").value;
+
+        const observaciones =
+        document.getElementById("editarObservaciones").value;
+
+        const archivoNuevo =
+        document.getElementById("editarDocumento").files[0];
+
+        const { error } = await window.supabaseClient
+
+        .from("auditorias")
+
+        .update({
+
+            tipo,
+            nombre,
+            responsable,
+            proceso,
+            estado,
+            fecha,
+            observaciones
+
+        })
+
+        .eq("id", id);
+
+        if(error){
+
+            console.error(error);
+
+            alert(error.message);
+
+            return;
+
+        }
+
+        // El documento nuevo lo agregaremos en el siguiente paso
+
+        alert("Información actualizada correctamente.");
+
+        document
+        .getElementById("modalEditarAuditoria")
+        .classList.remove("active");
+
+        await window.cargarAuditorias();
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+        alert(error.message);
+
+    }
+
+}
+
 // ============================
 // ELIMINAR AUDITORÍA
 // ============================
