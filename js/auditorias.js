@@ -1178,7 +1178,7 @@ window.actualizarDocumento = function(id){
 
 
 // ============================
-// CAMBIAR DOCUMENTO
+// ACTUALIZAR DOCUMENTO
 // ============================
 
 const actualizarDocumentoInput =
@@ -1188,25 +1188,23 @@ document.getElementById(
 
 if(actualizarDocumentoInput){
 
-    actualizarDocumentoInput.onchange = async function(e){
+    actualizarDocumentoInput.onchange = async function(){
 
         try{
 
-            const archivo = e.target.files[0];
+            const archivo = this.files[0];
 
             if(!archivo){
-
                 return;
-
             }
 
             const documentoId = Number(
                 this.dataset.documentoId
             );
 
-            //=========================
-            // CONSULTAR DOCUMENTO
-            //=========================
+            //==============================
+            // CONSULTAR DOCUMENTO ACTUAL
+            //==============================
 
             const { data: documento, error } =
 
@@ -1224,27 +1222,15 @@ if(actualizarDocumentoInput){
 
                 console.error(error);
 
-                alert("No fue posible localizar el documento.");
+                alert(error.message);
 
                 return;
 
             }
 
-            //=========================
-            // ELIMINAR ARCHIVO ANTERIOR
-            //=========================
-
-            await window.supabaseClient
-
-            .storage
-
-            .from("auditorias")
-
-            .remove([documento.ruta_storage]);
-
-            //=========================
-            // NUEVO NOMBRE
-            //=========================
+            //==============================
+            // NUEVA RUTA
+            //==============================
 
             const nombreStorage =
 
@@ -1254,7 +1240,7 @@ if(actualizarDocumentoInput){
 
                 archivo.name;
 
-            const rutaStorage =
+            const rutaNueva =
 
                 documento.auditoria_id +
 
@@ -1262,9 +1248,9 @@ if(actualizarDocumentoInput){
 
                 nombreStorage;
 
-            //=========================
-            // SUBIR NUEVO
-            //=========================
+            //==============================
+            // SUBIR ARCHIVO NUEVO
+            //==============================
 
             const subida =
 
@@ -1276,7 +1262,7 @@ if(actualizarDocumentoInput){
 
             .upload(
 
-                rutaStorage,
+                rutaNueva,
 
                 archivo
 
@@ -1292,11 +1278,11 @@ if(actualizarDocumentoInput){
 
             }
 
-            //=========================
-            // ACTUALIZAR BASE
-            //=========================
+            //==============================
+            // ACTUALIZAR BASE DE DATOS
+            //==============================
 
-            const actualizar =
+            const { error:updateError } =
 
             await window.supabaseClient
 
@@ -1306,7 +1292,7 @@ if(actualizarDocumentoInput){
 
                 nombre_archivo: archivo.name,
 
-                ruta_storage: rutaStorage,
+                ruta_storage: rutaNueva,
 
                 tipo_archivo:
 
@@ -1324,17 +1310,35 @@ if(actualizarDocumentoInput){
 
             .eq("id", documentoId);
 
-            if(actualizar.error){
+            if(updateError){
 
-                console.error(actualizar.error);
+                console.error(updateError);
 
-                alert(actualizar.error.message);
+                alert(updateError.message);
 
                 return;
 
             }
 
-            alert("Documento actualizado correctamente.");
+            //==============================
+            // ELIMINAR ARCHIVO ANTERIOR
+            //==============================
+
+            await window.supabaseClient
+
+            .storage
+
+            .from("auditorias")
+
+            .remove([
+
+                documento.ruta_storage
+
+            ]);
+
+            alert(
+                "Documento actualizado correctamente."
+            );
 
             await window.verDocumentos(
                 documento.auditoria_id
@@ -1346,6 +1350,8 @@ if(actualizarDocumentoInput){
 
             console.error(error);
 
+            alert(error.message);
+
         }
 
         this.value = "";
@@ -1353,6 +1359,8 @@ if(actualizarDocumentoInput){
     };
 
 }
+
+
 // ============================
 // VER DETALLE AUDITORÍA
 // ============================
