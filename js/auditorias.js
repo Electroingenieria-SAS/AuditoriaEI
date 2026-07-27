@@ -1147,7 +1147,6 @@ window.descargarDocumento = async function(ruta){
 
 };
 
-};
 const cerrarModalDocumentos =
 document.getElementById("cerrarModalDocumentos");
 
