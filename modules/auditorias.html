@@ -460,17 +460,17 @@
 
 </div>
 
-  <!-- ==========================================
+<!-- ==========================================
      MODAL EDITAR AUDITORÍA
 =========================================== -->
 
 <div id="modalEditarAuditoria" class="modal-documentos">
 
-    <div class="modal-documentos-content modal-editar-auditoria">
+    <div class="modal-documentos-content modal-detalle">
 
         <div class="modal-header">
 
-            <h3>Editar Auditoría</h3>
+            <h3>✏️ Editar Auditoría</h3>
 
             <button
                 id="cerrarEditarAuditoria"
@@ -481,12 +481,7 @@
 
         </div>
 
-        <input
-            type="hidden"
-            id="editarAuditoriaId"
-        >
-
-        <div class="form-grid">
+        <div class="detalle-grid">
 
             <div class="input-group">
 
@@ -554,9 +549,9 @@
 
                 <select id="editarEstado">
 
-                    <option value="Pendiente">Pendiente</option>
-                    <option value="En proceso">En proceso</option>
-                    <option value="Finalizada">Finalizada</option>
+                    <option>Pendiente</option>
+                    <option>En proceso</option>
+                    <option>Finalizada</option>
 
                 </select>
 
@@ -564,34 +559,48 @@
 
         </div>
 
-        <div class="input-group textarea-group">
+        <div class="textarea-group" style="padding:0 30px 30px;">
 
             <label>Observaciones</label>
 
             <textarea
-                id="editarObservaciones"
-            ></textarea>
+                id="editarObservaciones">
+            </textarea>
 
         </div>
 
-        <hr>
+        <div class="detalle-documentos">
 
-        <h4>Documentos</h4>
+            <h4>Documentos</h4>
 
-        <div id="listaEditarDocumentos">
+            <div id="editarListaDocumentos"></div>
 
         </div>
 
-        <br>
+        <input
+            id="editarDocumentoInput"
+            type="file"
+            accept=".pdf,.xlsx,.xls"
+            hidden
+        >
 
-        <button
-            id="guardarCambiosAuditoria"
-            class="btn-primary"
-            type="button">
+        <div
+            style="
+            display:flex;
+            justify-content:flex-end;
+            gap:15px;
+            padding:30px;
+            ">
 
-            💾 Guardar Cambios
+            <button
+                id="btnGuardarEdicion"
+                class="btn-primary">
 
-        </button>
+                💾 Guardar Cambios
+
+            </button>
+
+        </div>
 
     </div>
 
