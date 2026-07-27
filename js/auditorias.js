@@ -1150,7 +1150,31 @@ if(cerrarModalDocumentos){
     };
 
 }
+// ============================
+// ACTUALIZAR DOCUMENTO
+// ============================
 
+window.actualizarDocumento = function(id){
+
+    const input = document.getElementById(
+        "actualizarDocumentoInput"
+    );
+
+    if(!input){
+
+        alert(
+            "No existe el input para actualizar documentos."
+        );
+
+        return;
+
+    }
+
+    input.dataset.documentoId = id;
+
+    input.click();
+
+};
 
 // ============================
 // VER DETALLE AUDITORÍA
