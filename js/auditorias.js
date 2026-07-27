@@ -1268,6 +1268,11 @@ if(actualizarDocumentoInput){
 
             );
 
+            console.log("==================================");
+console.log("Ruta:", rutaStorage);
+
+console.log("Resultado subida:", subida);
+
             if(subida.error){
 
                 console.error(subida.error);
