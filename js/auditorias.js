@@ -842,17 +842,6 @@ window.verDocumentos = async function(id){
 
                 </button>
 
-                <button
-
-                    class="btn-warning"
-
-                    onclick="actualizarDocumento(${doc.id})"
-
-                >
-
-                    📤 Subir nuevo documento
-
-                </button>
 
             </div>
 
