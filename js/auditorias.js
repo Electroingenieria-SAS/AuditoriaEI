@@ -1037,6 +1037,116 @@ async function guardarCambiosAuditoria(){
 
         }
 
+        //==============================
+// REEMPLAZAR DOCUMENTO
+//==============================
+
+if(archivoNuevo){
+
+    // Buscar documento actual
+
+    const { data: documento } =
+
+    await window.supabaseClient
+
+    .from("auditoria_documentos")
+
+    .select("*")
+
+    .eq("auditoria_id", id)
+
+    .single();
+
+    if(documento){
+
+        const extension =
+
+        archivoNuevo.name
+
+        .split(".")
+
+        .pop()
+
+        .toUpperCase();
+
+        const rutaNueva =
+
+        id +
+
+        "/" +
+
+        Date.now() +
+
+        "_" +
+
+        archivoNuevo.name;
+
+        // Subir nuevo archivo
+
+        const { error: errorSubida } =
+
+        await window.supabaseClient
+
+        .storage
+
+        .from("auditorias")
+
+        .upload(
+
+            rutaNueva,
+
+            archivoNuevo
+
+        );
+
+        if(errorSubida){
+
+            console.error(errorSubida);
+
+            alert(errorSubida.message);
+
+            return;
+
+        }
+
+        // Actualizar BD
+
+        await window.supabaseClient
+
+        .from("auditoria_documentos")
+
+        .update({
+
+            nombre_archivo: archivoNuevo.name,
+
+            ruta_storage: rutaNueva,
+
+            tipo_archivo: extension,
+
+            tamano: archivoNuevo.size
+
+        })
+
+        .eq("id", documento.id);
+
+        // Eliminar archivo viejo
+
+        await window.supabaseClient
+
+        .storage
+
+        .from("auditorias")
+
+        .remove([
+
+            documento.ruta_storage
+
+        ]);
+
+    }
+
+}
+
         // El documento nuevo lo agregaremos en el siguiente paso
 
         alert("Información actualizada correctamente.");
