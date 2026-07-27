@@ -1150,11 +1150,12 @@ if(cerrarModalDocumentos){
     };
 
 }
+
 // ============================
-// ACTUALIZAR DOCUMENTO
+// SELECCIONAR DOCUMENTO NUEVO
 // ============================
 
-window.actualizarDocumento = function(id){
+window.actualizarDocumento = function(documentoId){
 
     const input = document.getElementById(
         "actualizarDocumentoInput"
@@ -1163,22 +1164,23 @@ window.actualizarDocumento = function(id){
     if(!input){
 
         alert(
-            "No existe el input para actualizar documentos."
+            "No se encontró el selector de archivos."
         );
 
         return;
 
     }
 
-    input.dataset.documentoId = id;
+    input.value = "";
+
+    input.dataset.documentoId = documentoId;
 
     input.click();
 
 };
 
-
 // ============================
-// ACTUALIZAR DOCUMENTO
+// CAMBIO DE DOCUMENTO
 // ============================
 
 const actualizarDocumentoInput =
@@ -1190,183 +1192,142 @@ if(actualizarDocumentoInput){
 
     actualizarDocumentoInput.onchange = async function(){
 
-        try{
+        const archivo = this.files[0];
 
-            const archivo = this.files[0];
+        if(!archivo){
 
-            if(!archivo){
-                return;
-            }
-
-            const documentoId = Number(
-                this.dataset.documentoId
-            );
-
-            //==============================
-            // CONSULTAR DOCUMENTO ACTUAL
-            //==============================
-
-            const { data: documento, error } =
-
-            await window.supabaseClient
-
-            .from("auditoria_documentos")
-
-            .select("*")
-
-            .eq("id", documentoId)
-
-            .single();
-
-            if(error){
-
-                console.error(error);
-
-                alert(error.message);
-
-                return;
-
-            }
-
-            //==============================
-            // NUEVA RUTA
-            //==============================
-
-            const nombreStorage =
-
-                Date.now() +
-
-                "_" +
-
-                archivo.name;
-
-            const rutaNueva =
-
-                documento.auditoria_id +
-
-                "/" +
-
-                nombreStorage;
-
-            //==============================
-            // SUBIR ARCHIVO NUEVO
-            //==============================
-
-            const subida =
-
-            await window.supabaseClient
-
-            .storage
-
-            .from("auditorias")
-
-            .upload(
-
-                rutaNueva,
-
-                archivo
-
-            );
-
-            console.log(subida);
-
-          console.log("==================================");
-console.log("Documento:", documento);
-console.log("Ruta anterior:", documento.ruta_storage);
-console.log("Ruta nueva:", rutaNueva);
-console.log("Resultado subida:", subida);
-
-            if(subida.error){
-
-                console.error(subida.error);
-
-                alert(subida.error.message);
-
-                return;
-
-            }
-
-            //==============================
-            // ACTUALIZAR BASE DE DATOS
-            //==============================
-
-            const { error:updateError } =
-
-            await window.supabaseClient
-
-            .from("auditoria_documentos")
-
-            .update({
-
-                nombre_archivo: archivo.name,
-
-                ruta_storage: rutaNueva,
-
-                tipo_archivo:
-
-                    archivo.name
-
-                    .split(".")
-
-                    .pop()
-
-                    .toUpperCase(),
-
-                tamano: archivo.size
-
-            })
-
-            .eq("id", documentoId);
-
-            if(updateError){
-
-                console.error(updateError);
-
-                alert(updateError.message);
-
-                return;
-
-            }
-
-            //==============================
-            // ELIMINAR ARCHIVO ANTERIOR
-            //==============================
-
-            await window.supabaseClient
-
-            .storage
-
-            .from("auditorias")
-
-            .remove([
-
-                documento.ruta_storage
-
-            ]);
-
-            alert(
-                "Documento actualizado correctamente."
-            );
-
-            await window.verDocumentos(
-                documento.auditoria_id
-            );
+            return;
 
         }
 
-        catch(error){
+        const documentoId = Number(
+            this.dataset.documentoId
+        );
 
-            console.error(error);
+        await subirNuevoDocumento(
 
-            alert(error.message);
+            documentoId,
 
-        }
+            archivo
+
+        );
 
         this.value = "";
 
     };
 
 }
+
+// ============================
+// SUBIR NUEVO DOCUMENTO
+// ============================
+
+async function subirNuevoDocumento(documentoId, archivo){
+
+    try{
+
+        //==============================
+        // BUSCAR DOCUMENTO ACTUAL
+        //==============================
+
+        const { data: documento, error } =
+
+        await window.supabaseClient
+
+        .from("auditoria_documentos")
+
+        .select("*")
+
+        .eq("id", documentoId)
+
+        .single();
+
+        if(error){
+
+            console.error(error);
+
+            alert(error.message);
+
+            return;
+
+        }
+
+        //==============================
+        // GENERAR NUEVA RUTA
+        //==============================
+
+        const extension =
+
+        archivo.name.split(".").pop().toUpperCase();
+
+        const nombreStorage =
+
+        Date.now() +
+
+        "_" +
+
+        archivo.name;
+
+        const rutaNueva =
+
+        documento.auditoria_id +
+
+        "/" +
+
+        nombreStorage;
+
+        //==============================
+        // SUBIR ARCHIVO
+        //==============================
+
+        const { data: subida, error: errorSubida } =
+
+        await window.supabaseClient
+
+        .storage
+
+        .from("auditorias")
+
+        .upload(
+
+            rutaNueva,
+
+            archivo,
+
+            {
+
+                upsert:false
+
+            }
+
+        );
+
+        if(errorSubida){
+
+            console.error(errorSubida);
+
+            alert(errorSubida.message);
+
+            return;
+
+        }
+
+        console.log("Archivo subido:", subida);
+
+        // El siguiente paso será actualizar la base de datos.
+
+    }
+
+    catch(error){
+
+        console.error(error);
+
+        alert(error.message);
+
+    }
+
+}
+
 
 
 // ============================
