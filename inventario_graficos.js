@@ -347,6 +347,142 @@ function renderChartResultadosInventario(exactos, faltantes, sobrantes){
 }
 
 // ========================================
+// DESCARGAR DASHBOARD EN PDF
+// ========================================
+
+window.descargarDashboardPDF = async function(){
+
+  const boton = document.getElementById("btnDescargarPDF");
+  const elemento = document.getElementById("reporteDashboard");
+  const botonesHeader = document.querySelector(".graficos-header .button-group");
+
+  if(!elemento || !window.html2canvas || !window.jspdf){
+    alert("No se pudo generar el PDF. Verifica tu conexión a internet.");
+    return;
+  }
+
+  try{
+
+    if(boton){
+      boton.disabled = true;
+      boton.innerText = "⏳ Generando PDF...";
+    }
+
+    // Ocultar botones de acción para que no salgan en la foto del reporte
+    if(botonesHeader){
+      botonesHeader.style.visibility = "hidden";
+    }
+
+    // Sello de fecha/hora para el reporte
+    const fecha = new Date();
+
+    const fechaTexto =
+    fecha.toLocaleDateString("es-CO") + " " +
+    fecha.toLocaleTimeString("es-CO");
+
+    let selloFecha = document.getElementById("selloFechaReporte");
+
+    if(!selloFecha){
+
+      selloFecha = document.createElement("p");
+      selloFecha.id = "selloFechaReporte";
+      selloFecha.style.cssText =
+        "margin-top:-15px;color:#94a3b8;font-size:12px;";
+
+      elemento.insertBefore(
+        selloFecha,
+        elemento.children[1]
+      );
+
+    }
+
+    selloFecha.innerText = "Reporte generado: " + fechaTexto;
+
+    // Capturar el contenedor completo como imagen
+    const canvas = await window.html2canvas(elemento, {
+      scale: 2,
+      backgroundColor: "#f1f5f9",
+      useCORS: true
+    });
+
+    const imagenData = canvas.toDataURL("image/png");
+
+    // Armar el PDF (tamaño carta, orientación vertical)
+    const { jsPDF } = window.jspdf;
+
+    const pdf = new jsPDF({
+      orientation: "portrait",
+      unit: "pt",
+      format: "letter"
+    });
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const margen = 20;
+    const anchoDisponible = pageWidth - (margen * 2);
+
+    const alturaImagen =
+    (canvas.height * anchoDisponible) / canvas.width;
+
+    let alturaRestante = alturaImagen;
+    let posicionY = margen;
+
+    // Primera página
+    pdf.addImage(
+      imagenData, "PNG",
+      margen, posicionY,
+      anchoDisponible, alturaImagen
+    );
+
+    alturaRestante -= (pageHeight - margen * 2);
+
+    // Si el contenido no cabe en una sola página, agregar páginas extra
+    while(alturaRestante > 0){
+
+      posicionY = alturaRestante - alturaImagen + margen;
+
+      pdf.addPage();
+
+      pdf.addImage(
+        imagenData, "PNG",
+        margen, posicionY,
+        anchoDisponible, alturaImagen
+      );
+
+      alturaRestante -= (pageHeight - margen * 2);
+
+    }
+
+    const nombreArchivo =
+    "Dashboard_Inventario_" +
+    fecha.toISOString().slice(0, 10) + ".pdf";
+
+    pdf.save(nombreArchivo);
+
+  }
+  catch(error){
+
+    console.log("Error descargarDashboardPDF:", error);
+    alert("Ocurrió un error generando el PDF.");
+
+  }
+  finally{
+
+    if(botonesHeader){
+      botonesHeader.style.visibility = "visible";
+    }
+
+    if(boton){
+      boton.disabled = false;
+      boton.innerText = "📄 Descargar PDF";
+    }
+
+  }
+
+};
+
+// ========================================
 // INICIO
 // ========================================
 
