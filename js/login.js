@@ -1,5 +1,5 @@
 if (!window.supabase) {
-alert('Error cargando Supabase');
+notifAlert('Error cargando Supabase');
 throw new Error('Supabase no cargó correctamente');
 }
 
@@ -46,7 +46,7 @@ if(
   !usuarioInput ||
   !passwordInput
 ){
-  alert(
+  notifAlert(
     'Inputs no encontrados'
   );
   return;
@@ -65,7 +65,7 @@ if(
   !usuario ||
   !password
 ){
-  alert(
+  notifAlert(
     'Complete todos los campos'
   );
   return;
@@ -93,7 +93,7 @@ await window.supabaseClient
 
 if(error){
   console.log(error);
-  alert(
+  notifAlert(
     'Error conectando con Supabase'
   );
   return;
@@ -103,7 +103,7 @@ if(
   !data ||
   data.length === 0
 ){
-  alert(
+  notifAlert(
     'Usuario o contraseña incorrectos'
   );
   return;
@@ -116,7 +116,7 @@ if(
   usuarioData.estado ===
   'Inactivo'
 ){
-  alert(
+  notifAlert(
     'Usuario inactivo'
   );
   return;
@@ -142,7 +142,7 @@ catch(error){
 
 console.log(error);
 
-alert(
+notifAlert(
   'Error general en login'
 );
 

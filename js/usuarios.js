@@ -57,7 +57,7 @@ async function guardarUsuario(){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -123,7 +123,7 @@ async function guardarUsuario(){
 
     ){
 
-      alert(
+      notifAlert(
         'Complete todos los campos'
       );
 
@@ -169,7 +169,7 @@ async function guardarUsuario(){
 
     ){
 
-      alert(
+      notifAlert(
         'El usuario ya existe'
       );
 
@@ -221,7 +221,7 @@ async function guardarUsuario(){
         response.error
       );
 
-      alert(
+      notifAlert(
         'Error guardando usuario'
       );
 
@@ -419,7 +419,7 @@ async function guardarUsuario(){
         permisosResponse.error
       );
 
-      alert(
+      notifAlert(
         'Error guardando permisos'
       );
 
@@ -462,7 +462,7 @@ async function guardarUsuario(){
 
 
 
-    alert(
+    notifAlert(
       'Usuario guardado correctamente'
     );
 
@@ -766,7 +766,7 @@ window.editarUsuario = async function(id){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -809,7 +809,7 @@ window.editarUsuario = async function(id){
 
     if(!usuario){
 
-      alert(
+      notifAlert(
         'Usuario no encontrado'
       );
 
@@ -821,10 +821,10 @@ window.editarUsuario = async function(id){
 
 
 
-    const nuevaPassword = prompt(
+    const nuevaPassword = await Notif.prompt(
 
-      'Nueva contraseña:',
-
+      'Escriba la nueva contraseña para este usuario.',
+      'Cambiar contraseña',
       usuario.password || ''
 
     );
@@ -843,17 +843,12 @@ window.editarUsuario = async function(id){
 
 
 
-    const nuevoRol = prompt(
+    const nuevoRol = await Notif.prompt(
 
-`Nuevo rol:
-
-admin
-lider
-jefe
-auditor
-compras`,
-
-      usuario.rol
+      'Seleccione el nuevo rol del usuario.',
+      'Cambiar rol',
+      usuario.rol,
+      ['admin', 'lider', 'jefe', 'auditor', 'compras']
 
     );
 
@@ -871,14 +866,12 @@ compras`,
 
 
 
-    const nuevoEstado = prompt(
+    const nuevoEstado = await Notif.prompt(
 
-`Nuevo estado:
-
-Activo
-Inactivo`,
-
-      usuario.estado || 'Activo'
+      'Seleccione el nuevo estado del usuario.',
+      'Cambiar estado',
+      usuario.estado || 'Activo',
+      ['Activo', 'Inactivo']
 
     );
 
@@ -923,7 +916,7 @@ Inactivo`,
         update.error
       );
 
-      alert(
+      notifAlert(
         'Error actualizando usuario'
       );
 
@@ -941,7 +934,7 @@ Inactivo`,
 
 
 
-    alert(
+    notifAlert(
       'Usuario actualizado'
     );
 
@@ -976,7 +969,7 @@ window.eliminarUsuario = async function(id){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -988,7 +981,8 @@ window.eliminarUsuario = async function(id){
 
 
 
-    const confirmar = confirm(
+    const confirmar = await Notif.confirm(
+      'Esta acción no se puede deshacer.',
       '¿Eliminar usuario?'
     );
 
@@ -1061,7 +1055,7 @@ window.eliminarUsuario = async function(id){
         response.error
       );
 
-      alert(
+      notifAlert(
         'Error eliminando usuario'
       );
 
@@ -1097,7 +1091,7 @@ window.eliminarUsuario = async function(id){
 
 
 
-    alert(
+    notifAlert(
       'Usuario eliminado'
     );
 

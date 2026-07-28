@@ -357,7 +357,7 @@ window.descargarDashboardPDF = async function(){
   const botonesHeader = document.querySelector(".graficos-header .button-group");
 
   if(!elemento || !window.html2canvas || !window.jspdf){
-    alert("No se pudo generar el PDF. Verifica tu conexión a internet.");
+    Notif.error("Verifica tu conexión a internet e intenta de nuevo.", "No se pudo generar el PDF");
     return;
   }
 
@@ -464,7 +464,7 @@ window.descargarDashboardPDF = async function(){
   catch(error){
 
     console.log("Error descargarDashboardPDF:", error);
-    alert("Ocurrió un error generando el PDF.");
+    Notif.error("Ocurrió un error generando el PDF.");
 
   }
   finally{

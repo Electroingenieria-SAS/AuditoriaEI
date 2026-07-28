@@ -185,7 +185,7 @@ async function guardarRecepcion(){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -372,7 +372,7 @@ async function guardarRecepcion(){
           subida.error
         );
 
-        alert(
+        notifAlert(
           'Error subiendo PDF'
         );
 
@@ -488,7 +488,7 @@ async function guardarRecepcion(){
         response.error
       );
 
-      alert(
+      notifAlert(
         'Error guardando recepción'
       );
 
@@ -533,7 +533,7 @@ await window.actualizarDashboardRecepcion();
 
 limpiarFormulario();
 
-alert(
+notifAlert(
   'Recepción guardada correctamente'
 );
 
@@ -1150,7 +1150,7 @@ if(window.guardarGestionBtn){
 
       if(comentario === ''){
 
-        alert(
+        notifAlert(
           'Ingrese comentario'
         );
 
@@ -1160,7 +1160,7 @@ if(window.guardarGestionBtn){
 
       if(!window.recepcionGestionando){
 
-        alert(
+        notifAlert(
           'No se encontró la recepción.'
         );
 
@@ -1195,7 +1195,7 @@ if(window.guardarGestionBtn){
           consulta.error
         );
 
-        alert(
+        notifAlert(
           'Error consultando recepción'
         );
 
@@ -1273,7 +1273,7 @@ ${comentario}
           update.error
         );
 
-        alert(
+        notifAlert(
           'Error actualizando gestión'
         );
 
@@ -1332,7 +1332,8 @@ window.eliminarRecepcion = async function(id){
 
   try{
 
-    const confirmar = confirm(
+    const confirmar = await Notif.confirm(
+      'Esta acción no se puede deshacer.',
       '¿Eliminar recepción?'
     );
 

@@ -52,7 +52,7 @@ function leerExcel(evento) {
 
         if (!datosExcel.length) {
 
-            alert(
+            notifAlert(
                 "El archivo no contiene datos."
             );
 

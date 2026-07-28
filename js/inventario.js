@@ -122,7 +122,7 @@ function leerExcel(e){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -192,7 +192,7 @@ console.log(inventarioExcel[0]);
 
         ){
 
-          alert(
+          notifAlert(
             'El archivo está vacío'
           );
 
@@ -218,7 +218,7 @@ if(eliminarError){
 
     console.error(eliminarError);
 
-    alert("Error limpiando el inventario.");
+    notifAlert("Error limpiando el inventario.");
 
     return;
 
@@ -252,7 +252,7 @@ if(insertarError){
 
     console.error(insertarError);
 
-    alert("Error guardando el inventario.");
+    notifAlert("Error guardando el inventario.");
 
     return;
 
@@ -262,7 +262,7 @@ window.inventario = registros;
 
 window.renderInventario();
 
-alert("Inventario cargado correctamente.");
+notifAlert("Inventario cargado correctamente.");
 
               }
 
@@ -454,7 +454,7 @@ window.renderInventario = function(datos){
 // ELIMINAR PRODUCTO
 // ========================================
 
-window.eliminarProducto = function(codigo){
+window.eliminarProducto = async function(codigo){
 
   try{
 
@@ -467,7 +467,7 @@ window.eliminarProducto = function(codigo){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -475,7 +475,8 @@ window.eliminarProducto = function(codigo){
 
     }
 
-    const confirmar = confirm(
+    const confirmar = await Notif.confirm(
+      'Esta acción no se puede deshacer.',
       '¿Eliminar producto?'
     );
 
@@ -519,7 +520,7 @@ window.eliminarProducto = function(codigo){
       }
     }
 
-    alert(
+    notifAlert(
       'Producto eliminado'
     );
 
@@ -555,7 +556,7 @@ function buscarProducto(){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -582,7 +583,7 @@ function buscarProducto(){
 
     if(!codigo){
 
-      alert(
+      notifAlert(
         'Digite un código'
       );
 
@@ -606,7 +607,7 @@ const registros =
 
 if(registros.length === 0){
 
-    alert(
+    notifAlert(
       'Producto no encontrado'
     );
 
@@ -700,7 +701,7 @@ function registrarConteo(){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -714,7 +715,7 @@ function registrarConteo(){
 
     if(!window.productoActual){
 
-      alert(
+      notifAlert(
         'Busque un producto'
       );
 
@@ -734,7 +735,7 @@ function registrarConteo(){
 
     if(!conteoInput){
 
-      alert(
+      notifAlert(
         'No se encontró el campo conteo'
       );
 
@@ -752,7 +753,7 @@ function registrarConteo(){
 
     if(isNaN(fisico)){
 
-      alert(
+      notifAlert(
         'Ingrese un valor válido'
       );
 
@@ -892,7 +893,7 @@ function registrarConteo(){
 
     }
 
-    alert(
+    notifAlert(
       'Conteo guardado'
     );
 
@@ -1090,7 +1091,7 @@ window.eliminarRegistro = function(codigo){
 
     ){
 
-      alert(
+      notifAlert(
         'No tiene permisos'
       );
 
@@ -1391,7 +1392,7 @@ function exportarExcel(){
 
     if(historial.length === 0){
 
-      alert(
+      notifAlert(
         'No hay datos'
       );
 
@@ -1449,13 +1450,14 @@ async function reiniciarInventario(){
       )
     ){
 
-      alert('No tiene permisos');
+      notifAlert('No tiene permisos');
       return;
 
     }
 
-    const confirmar = confirm(
-      '¿Eliminar todo el inventario e historial?'
+    const confirmar = await Notif.confirm(
+      'Se borrarán TODOS los productos cargados y el historial de conteos. Esta acción no se puede deshacer.',
+      '¿Reiniciar inventario completo?'
     );
 
     if(!confirmar){
@@ -1480,7 +1482,7 @@ async function reiniciarInventario(){
 
       console.error(error);
 
-      alert(
+      notifAlert(
         "Error eliminando el inventario."
       );
 
@@ -1515,7 +1517,7 @@ async function reiniciarInventario(){
       "-"
     );
 
-    alert(
+    notifAlert(
       "Inventario reiniciado correctamente."
     );
 
@@ -1718,7 +1720,7 @@ if(guardarNovedadBtn){
         !observacion
       ){
 
-        alert(
+        notifAlert(
           'Complete todos los campos obligatorios'
         );
 
@@ -1775,7 +1777,7 @@ if(guardarNovedadBtn){
           response.error
         );
 
-        alert(
+        notifAlert(
           response.error.message
         );
 
@@ -1783,7 +1785,7 @@ if(guardarNovedadBtn){
 
       }
 
-      alert(
+      notifAlert(
         'Novedad registrada correctamente'
       );
 
@@ -1801,7 +1803,7 @@ if(guardarNovedadBtn){
 
       console.log(error);
 
-      alert(
+      notifAlert(
         error.message
       );
 
@@ -1962,7 +1964,8 @@ window.eliminarNovedad = async function(id){
 
   try{
 
-    const confirmar = confirm(
+    const confirmar = await Notif.confirm(
+      'Esta acción no se puede deshacer.',
       '¿Eliminar novedad?'
     );
 
@@ -1989,7 +1992,7 @@ window.eliminarNovedad = async function(id){
 
     if(response.error){
 
-      alert(
+      notifAlert(
         response.error.message
       );
 
@@ -1999,7 +2002,7 @@ window.eliminarNovedad = async function(id){
 
     await window.renderNovedades();
 
-    alert(
+    notifAlert(
       'Novedad eliminada'
     );
 

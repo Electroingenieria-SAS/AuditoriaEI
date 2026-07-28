@@ -537,7 +537,7 @@ cerrarModal(){
 
         if(datos.nombre===""){
 
-            alert("Ingrese el nombre del inventario.");
+            notifAlert("Ingrese el nombre del inventario.");
 
             return false;
 
@@ -545,7 +545,7 @@ cerrarModal(){
 
         if(datos.programados>datos.totalEmpresa){
 
-            alert("Los programados no pueden superar el total empresa.");
+            notifAlert("Los programados no pueden superar el total empresa.");
 
             return false;
 
@@ -553,7 +553,7 @@ cerrarModal(){
 
         if(datos.auditados>datos.programados){
 
-            alert("Los auditados no pueden superar los programados.");
+            notifAlert("Los auditados no pueden superar los programados.");
 
             return false;
 
@@ -561,7 +561,7 @@ cerrarModal(){
 
         if(datos.correctos>datos.auditados){
 
-            alert("Los correctos no pueden superar los auditados.");
+            notifAlert("Los correctos no pueden superar los auditados.");
 
             return false;
 
@@ -577,7 +577,7 @@ cerrarModal(){
 
         ){
 
-            alert(
+            notifAlert(
 
                 "Sobrantes + Faltantes no pueden superar los auditados."
 
@@ -595,7 +595,7 @@ cerrarModal(){
 
         ){
 
-            alert(
+            notifAlert(
 
                 "El valor auditado no puede superar el valor inventario."
 
@@ -980,13 +980,13 @@ async guardar(){
 
         console.error(error);
 
-        alert(error.message);
+        notifAlert(error.message);
 
         return;
 
     }
 
-    alert("Análisis guardado correctamente.");
+    notifAlert("Análisis guardado correctamente.");
 
    await this.cargarAnalisis();
 
@@ -1556,7 +1556,7 @@ editarAnalisis(indice){
 
    async eliminarAnalisis(indice){
 
-    if(!confirm("¿Desea eliminar este análisis?")){
+    if(!await Notif.confirm("Esta acción no se puede deshacer.", "¿Desea eliminar este análisis?")){
         return;
     }
 
@@ -1569,7 +1569,7 @@ editarAnalisis(indice){
 
     if(error){
         console.error(error);
-        alert(error.message);
+        notifAlert(error.message);
         return;
     }
 
@@ -1579,7 +1579,7 @@ editarAnalisis(indice){
 
     this.actualizarDashboardInicial();
 
-    alert("Análisis eliminado correctamente.");
+    notifAlert("Análisis eliminado correctamente.");
 
 }
 

@@ -53,7 +53,7 @@ function leerExcel(e) {
 
     if (!archivo) {
 
-        alert("Seleccione un archivo Excel");
+        notifAlert("Seleccione un archivo Excel");
 
         return;
 
@@ -90,7 +90,7 @@ function leerExcel(e) {
 
             if (!datosExcel.length) {
 
-                alert(
+                notifAlert(
                     "El archivo no contiene datos."
                 );
 
@@ -106,7 +106,7 @@ function leerExcel(e) {
 
             console.error(error);
 
-            alert(
+            notifAlert(
                 "Error leyendo el Excel."
             );
 

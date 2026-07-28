@@ -5,7 +5,7 @@
 
 if(!window.supabase){
 
-  alert(
+  notifAlert(
     'Supabase no cargó correctamente'
   );
 

@@ -148,7 +148,7 @@ function manejarErrorSupabase(error, mensajeUsuario) {
     console.error(error);
     window.mostrarNotificacion
         ? window.mostrarNotificacion("Error", mensajeUsuario || error.message, "error")
-        : alert(mensajeUsuario || error.message);
+        : notifAlert(mensajeUsuario || error.message);
 }
 
 
@@ -255,7 +255,7 @@ function agregarDocumentos(e) {
         if (!extensionValida(archivo.name)) {
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Archivo no válido", "Solo se permiten archivos PDF o Excel.", "warning")
-                : alert("Solo se permiten archivos PDF o Excel.");
+                : notifAlert("Solo se permiten archivos PDF o Excel.");
             return;
         }
 
@@ -422,7 +422,7 @@ async function guardarAuditoria() {
         if (!window.tienePermiso("auditorias", "crear")) {
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Sin permisos", "No tiene permisos para crear auditorías.", "warning")
-                : alert("No tiene permisos.");
+                : notifAlert("No tiene permisos.");
             return;
         }
 
@@ -437,7 +437,7 @@ async function guardarAuditoria() {
         if (!tipo || !nombre || !proceso || !responsable || !fecha) {
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Datos incompletos", "Complete todos los campos obligatorios.", "warning")
-                : alert("Complete todos los campos obligatorios.");
+                : notifAlert("Complete todos los campos obligatorios.");
             return;
         }
 
@@ -724,7 +724,7 @@ async function guardarCambiosAuditoria() {
             !datosNuevos.responsable || !datosNuevos.fecha) {
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Datos incompletos", "Complete todos los campos obligatorios.", "warning")
-                : alert("Complete todos los campos obligatorios.");
+                : notifAlert("Complete todos los campos obligatorios.");
             return;
         }
 
@@ -734,7 +734,7 @@ async function guardarCambiosAuditoria() {
         if (archivoNuevo && !extensionValida(archivoNuevo.name)) {
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Archivo no válido", "Solo se permiten archivos PDF o Excel.", "warning")
-                : alert("Solo se permiten archivos PDF o Excel.");
+                : notifAlert("Solo se permiten archivos PDF o Excel.");
             return;
         }
 
@@ -775,7 +775,7 @@ async function guardarCambiosAuditoria() {
 
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Auditoría actualizada", "Los cambios se guardaron correctamente.", "success")
-                : alert("Información actualizada correctamente.");
+                : notifAlert("Información actualizada correctamente.");
         }
 
         // 5. Cerrar modal + recargar tabla
@@ -867,11 +867,11 @@ window.eliminarAuditoria = async function (id) {
         if (!window.tienePermiso("auditorias", "eliminar")) {
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Sin permisos", "No tiene permisos para eliminar auditorías.", "warning")
-                : alert("No tiene permisos.");
+                : notifAlert("No tiene permisos.");
             return;
         }
 
-        const confirmar = confirm("¿Eliminar esta auditoría? Esta acción también eliminará sus documentos adjuntos.");
+        const confirmar = await Notif.confirm("Esta acción también eliminará sus documentos adjuntos.\nEsta acción no se puede deshacer.", "¿Eliminar esta auditoría?");
         if (!confirmar) return;
 
         // Se eliminan primero los documentos (Storage + BD) para
@@ -908,11 +908,11 @@ window.editarEstado = async function (id) {
         if (!window.tienePermiso("auditorias", "editar")) {
             window.mostrarNotificacion
                 ? window.mostrarNotificacion("Sin permisos", "No tiene permisos para editar auditorías.", "warning")
-                : alert("No tiene permisos.");
+                : notifAlert("No tiene permisos.");
             return;
         }
 
-        const nuevoEstado = prompt("Nuevo estado:\n\nPendiente\nEn proceso\nFinalizada");
+        const nuevoEstado = await Notif.prompt("Seleccione el nuevo estado de la auditoría.", "Cambiar estado", null, ["Pendiente", "En proceso", "Finalizada"]);
         if (!nuevoEstado) return;
 
         const { error } = await window.supabaseClient
