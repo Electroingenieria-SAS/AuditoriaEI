@@ -406,6 +406,10 @@ window.renderInventario = function(datos){
       '</td>' +
 
       '<td>' +
+      (item.acciones || '-') +
+      '</td>' +
+
+      '<td>' +
 
       (
 
