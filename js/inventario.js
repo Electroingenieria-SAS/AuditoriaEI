@@ -223,7 +223,7 @@ const ALIAS_COLUMNAS = {
 
   producto: ["producto", "nombre", "descripcion", "material", "item", "nombreproducto", "descripcionproducto"],
 
-  ubicacion: ["ubicacion", "localizacion", "bodega", "zona", "posicion"],
+  ubicacion: ["ubicacion", "localizacion", "zona", "posicion"],
 
   stock: ["stock", "cantidad", "existencia", "stocksistema", "cantidadsistema", "saldo"]
 
