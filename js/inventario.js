@@ -1,6 +1,6 @@
 // ========================================
 // LIMPIAR VARIABLES ANTERIORES
-// ========================================
+// ======================================== 
 
 delete window.renderInventario;
 delete window.renderHistorial;
