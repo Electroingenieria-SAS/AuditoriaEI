@@ -221,7 +221,8 @@ const ALIAS_COLUMNAS = {
 
   codigo: ["codigo", "cod", "sku", "codigoproducto", "codprod", "id", "referencia"],
 
-  producto: ["producto", "nombre", "descripcion", "material", "item", "nombreproducto", "descripcionproducto"],
+  producto: ["producto", "nombre", "descripcion", "material", "item", "Desc. item",
+ "nombreproducto", "descripcionproducto"],
 
   ubicacion: ["ubicacion", "localizacion", "bodega", "zona", "posicion"],
 
