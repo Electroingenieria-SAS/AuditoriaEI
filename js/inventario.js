@@ -1,10 +1,10 @@
 // ========================================
 // LIMPIAR VARIABLES ANTERIORES
-// ======================================== 
+// ========================================
 
 delete window.renderInventario;
 delete window.renderHistorial;
-delete window.actualizarKPIs; 
+delete window.actualizarKPIs;
 delete window.eliminarProducto;
 delete window.eliminarRegistro;
 delete window.filtrarHistorial;
@@ -221,8 +221,7 @@ const ALIAS_COLUMNAS = {
 
   codigo: ["codigo", "cod", "sku", "codigoproducto", "codprod", "id", "referencia"],
 
-  producto: ["producto", "nombre", "descripcion", "material", "item", "Desc. item",
- "nombreproducto", "descripcionproducto"],
+  producto: ["producto", "nombre", "descripcion", "material", "item", "nombreproducto", "descripcionproducto"],
 
   ubicacion: ["ubicacion", "localizacion", "bodega", "zona", "posicion"],
 
@@ -1539,8 +1538,8 @@ async function reiniciarInventario(){
     }
 
     const confirmar = await Notif.confirm(
-      'Se borrarán TODOS los productos cargados y el historial de conteos. Esta acción no se puede deshacer.',
-      '¿Reiniciar inventario completo?'
+      'Se borrarán todos los productos cargados desde Excel. El historial de conteos NO se verá afectado. Esta acción no se puede deshacer.',
+      '¿Reiniciar inventario cargado?'
     );
 
     if(!confirmar){
@@ -1574,12 +1573,11 @@ async function reiniciarInventario(){
     }
 
     // ==============================
-    // LIMPIAR VARIABLES
+    // LIMPIAR SOLO EL EXCEL CARGADO
+    // (el historial de conteos se conserva)
     // ==============================
 
     window.inventario = [];
-
-    localStorage.removeItem("historial");
 
     // ==============================
     // ACTUALIZAR PANTALLA
@@ -1587,21 +1585,14 @@ async function reiniciarInventario(){
 
     window.renderInventario();
 
-    window.renderHistorial();
-
     window.actualizarKPIs();
 
     if(typeof window.refrescarDashboardSiActivo === "function"){
       window.refrescarDashboardSiActivo();
     }
 
-    actualizarTexto(
-      "resultadoTexto",
-      "-"
-    );
-
     notifAlert(
-      "Inventario reiniciado correctamente."
+      "Inventario cargado reiniciado. El historial de conteos se conservó."
     );
 
   }
