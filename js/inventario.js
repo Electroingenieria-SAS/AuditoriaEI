@@ -201,6 +201,70 @@ console.log(inventarioExcel[0]);
         }
 
        // ========================================
+// MAPEO ROBUSTO DE COLUMNAS (ignora mayúsculas,
+// acentos, espacios, orden y columnas extra)
+// ========================================
+
+function normalizarEncabezado(texto){
+
+  return String(texto || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quitar acentos
+    .replace(/[^a-z0-9]/g, "");      // quitar espacios/guiones/símbolos
+
+}
+
+// Alias aceptados para cada una de las 4 columnas que
+// SIEMPRE necesitamos, sin importar cómo venga el Excel.
+const ALIAS_COLUMNAS = {
+
+  codigo: ["codigo", "cod", "sku", "codigoproducto", "codprod", "id", "referencia"],
+
+  producto: ["producto", "nombre", "descripcion", "material", "item", "nombreproducto", "descripcionproducto"],
+
+  ubicacion: ["ubicacion", "localizacion", "bodega", "zona", "posicion"],
+
+  stock: ["stock", "cantidad", "existencia", "stocksistema", "cantidadsistema", "saldo"]
+
+};
+
+// Encabezados reales del archivo cargado (las llaves que
+// entrega sheet_to_json vienen de la primera fila del Excel)
+const encabezadosReales = Object.keys(inventarioExcel[0] || {});
+
+// Por cada columna que necesitamos, buscamos cuál encabezado
+// real del Excel coincide (normalizado) con alguno de sus alias
+function encontrarEncabezado(alias){
+
+  return encabezadosReales.find(function(real){
+
+    const realNormalizado = normalizarEncabezado(real);
+
+    return alias.some(function(posible){
+      return realNormalizado === posible;
+    });
+
+  });
+
+}
+
+const columnaCodigo = encontrarEncabezado(ALIAS_COLUMNAS.codigo);
+const columnaProducto = encontrarEncabezado(ALIAS_COLUMNAS.producto);
+const columnaUbicacion = encontrarEncabezado(ALIAS_COLUMNAS.ubicacion);
+const columnaStock = encontrarEncabezado(ALIAS_COLUMNAS.stock);
+
+if(!columnaCodigo){
+
+  notifAlert(
+    "No se encontró una columna de Código en el Excel. Verifique que exista una columna como 'Código', 'SKU' o 'Referencia'."
+  );
+
+  return;
+
+}
+
+       // ========================================
 // GUARDAR EN SUPABASE
 // ========================================
 
@@ -224,21 +288,39 @@ if(eliminarError){
 
 }
 
+// Sin importar cuántas columnas traiga el Excel (aunque sean
+// mil), solo se toman estas 4: código, producto, ubicación y
+// stock, localizadas dinámicamente por nombre de encabezado.
 const registros = inventarioExcel.map(function(item){
 
     return{
 
-        codigo: String(item.codigo || "").trim(),
+        codigo: String(columnaCodigo ? (item[columnaCodigo] || "") : "").trim(),
 
-        producto: String(item.producto || "").trim(),
+        producto: String(columnaProducto ? (item[columnaProducto] || "") : "").trim(),
 
-        ubicacion: String(item.ubicacion || "").trim(),
+        ubicacion: String(columnaUbicacion ? (item[columnaUbicacion] || "") : "").trim(),
 
-        stock: Number(item.stock || 0)
+        stock: Number(columnaStock ? (item[columnaStock] || 0) : 0)
 
     };
 
+}).filter(function(item){
+
+  // Se descartan filas totalmente vacías (sin código)
+  return item.codigo !== "";
+
 });
+
+if(registros.length === 0){
+
+  notifAlert(
+    "No se encontraron filas válidas con código en el Excel."
+  );
+
+  return;
+
+}
 
 const { error: insertarError } =
 
