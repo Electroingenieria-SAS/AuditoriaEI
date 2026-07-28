@@ -155,8 +155,17 @@
 <link rel="stylesheet" href="css/notificaciones-premium.css">
 <script src="js/notificaciones.js"></script>
 
-<!-- Si tu ERP carga un cliente supabase / permisos compartido, agrégalo aquí antes de este script -->
-<!-- <script src="supabaseClient.js"></script> -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  // Misma conexión Supabase que usa el resto del ERP,
+  // para que el dashboard lea el inventario real (no localStorage).
+  window.supabaseClient = window.supabase.createClient(
+    'https://hurxdjoiafkjoyrmyhbd.supabase.co',
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1cnhkam9pYWZram95cm15aGJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzgxMTMsImV4cCI6MjA5NTMxNDExM30.Z6fRiWft3eSEVNZbWflmcvVcHAJTAEA37tPdp4LRnTg'
+  );
+</script>
+
+<!-- Si tu ERP usa además un archivo de permisos compartido, agrégalo aquí -->
 <!-- <script src="permisos.js"></script> -->
 
 <script src="inventario_graficos.js"></script>
