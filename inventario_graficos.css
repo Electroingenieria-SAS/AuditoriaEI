@@ -45,13 +45,6 @@ KPIS COMPACTOS
   border:none;
 }
 
-.kpi-card-highlight span{
-  color:rgba(255,255,255,.85) !important;
-}
-
-.kpi-card-highlight h3{
-  color:white !important;
-}
 
 .kpi-ok{
   color:#10b981;
