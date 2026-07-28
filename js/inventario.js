@@ -223,7 +223,7 @@ const ALIAS_COLUMNAS = {
 
   producto: ["producto", "nombre", "descripcion", "material", "item", "nombreproducto", "descripcionproducto"],
 
-  ubicacion: ["ubicacion", "localizacion", "zona", "posicion"],
+  ubicacion: ["ubicacion", "localizacion", "bodega", "zona", "posicion"],
 
   stock: ["stock", "cantidad", "existencia", "stocksistema", "cantidadsistema", "saldo"]
 
@@ -322,21 +322,41 @@ if(registros.length === 0){
 
 }
 
-const { error: insertarError } =
+// ========================================
+// INSERTAR EN LOTES (Supabase puede fallar o
+// truncar si se envían miles de filas de una sola vez)
+// ========================================
 
-await window.supabaseClient
+const TAMANO_LOTE = 500;
+let totalInsertados = 0;
 
-.from("inventario")
+for(let i = 0; i < registros.length; i += TAMANO_LOTE){
 
-.insert(registros);
+  const lote = registros.slice(i, i + TAMANO_LOTE);
 
-if(insertarError){
+  const { error: insertarError } =
+
+  await window.supabaseClient
+
+  .from("inventario")
+
+  .insert(lote);
+
+  if(insertarError){
 
     console.error(insertarError);
 
-    notifAlert("Error guardando el inventario.");
+    notifAlert(
+      "Error guardando el inventario en el lote " +
+      (Math.floor(i / TAMANO_LOTE) + 1) +
+      ". Se cargaron " + totalInsertados + " de " + registros.length + " referencias."
+    );
 
     return;
+
+  }
+
+  totalInsertados += lote.length;
 
 }
 
@@ -344,7 +364,7 @@ window.inventario = registros;
 
 window.renderInventario();
 
-notifAlert("Inventario cargado correctamente.");
+notifAlert("Inventario cargado correctamente: " + totalInsertados + " referencias.");
 
               }
 
@@ -382,25 +402,50 @@ window.cargarInventario = async function(){
 
   try{
 
-    const { data, error } =
+    // Supabase limita cada respuesta a 1000 filas por defecto.
+    // Con miles de referencias hay que paginar con .range()
+    // hasta traer TODO el inventario.
 
-    await window.supabaseClient
+    const TAMANO_PAGINA = 1000;
+    let desde = 0;
+    let todosLosRegistros = [];
 
-    .from("inventario")
+    while(true){
 
-    .select("*")
+      const { data, error } =
 
-    .order("codigo");
+      await window.supabaseClient
 
-    if(error){
+      .from("inventario")
 
-      console.error(error);
+      .select("*")
 
-      return;
+      .order("codigo")
+
+      .range(desde, desde + TAMANO_PAGINA - 1);
+
+      if(error){
+
+        console.error(error);
+        break;
+
+      }
+
+      if(!data || data.length === 0){
+        break;
+      }
+
+      todosLosRegistros = todosLosRegistros.concat(data);
+
+      if(data.length < TAMANO_PAGINA){
+        break;
+      }
+
+      desde += TAMANO_PAGINA;
 
     }
 
-    window.inventario = data || [];
+    window.inventario = todosLosRegistros;
 
     window.renderInventario();
 

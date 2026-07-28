@@ -28,15 +28,42 @@ async function obtenerInventario(){
 
     if(window.supabaseClient){
 
-      const { data, error } =
-      await window.supabaseClient
-      .from("inventario")
-      .select("*")
-      .order("codigo");
+      // Supabase limita cada respuesta a 1000 filas por defecto,
+      // así que paginamos con .range() hasta traer TODO.
 
-      if(!error){
-        return data || [];
+      const TAMANO_PAGINA = 1000;
+      let desde = 0;
+      let todosLosRegistros = [];
+
+      while(true){
+
+        const { data, error } =
+        await window.supabaseClient
+        .from("inventario")
+        .select("*")
+        .order("codigo")
+        .range(desde, desde + TAMANO_PAGINA - 1);
+
+        if(error){
+          console.error(error);
+          break;
+        }
+
+        if(!data || data.length === 0){
+          break;
+        }
+
+        todosLosRegistros = todosLosRegistros.concat(data);
+
+        if(data.length < TAMANO_PAGINA){
+          break;
+        }
+
+        desde += TAMANO_PAGINA;
+
       }
+
+      return todosLosRegistros;
 
     }
 
