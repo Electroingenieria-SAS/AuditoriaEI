@@ -405,9 +405,7 @@ window.renderInventario = function(datos){
       (item.stock || 0) +
       '</td>' +
 
-      '<td>' +
-      (item.acciones || '-') +
-      '</td>' +
+      
 
       '<td>' +
 
