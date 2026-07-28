@@ -8,13 +8,11 @@
 <!-- Reutiliza los estilos generales del ERP -->
 <link rel="stylesheet" href="inventario.css">
 <link rel="stylesheet" href="inventario_graficos.css">
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/inventario.css">
 
 </head>
 <body>
 
-<div class="module-container graficos-page">
+<div class="module-container graficos-page" id="reporteDashboard">
 
   <!-- ===================================== -->
   <!-- HEADER -->
@@ -29,12 +27,16 @@
 
     <div class="button-group">
 
-      <button class="btn-secondary" onclick="window.location.href='dashboard.html'">
+      <button class="btn-secondary" onclick="window.location.href='inventario.html'">
         ⬅ Volver a Inventario
       </button>
 
       <button class="btn-primary" onclick="window.actualizarDashboardInventario()">
         🔄 Actualizar
+      </button>
+
+      <button class="btn-success" id="btnDescargarPDF" onclick="window.descargarDashboardPDF()">
+        📄 Descargar PDF
       </button>
 
     </div>
@@ -146,6 +148,8 @@
 
 <!-- Librerías -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <!-- Si tu ERP carga un cliente supabase / permisos compartido, agrégalo aquí antes de este script -->
 <!-- <script src="supabaseClient.js"></script> -->
