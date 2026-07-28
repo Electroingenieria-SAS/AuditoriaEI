@@ -4,7 +4,7 @@
 
 delete window.renderInventario;
 delete window.renderHistorial;
-delete window.actualizarKPIs;
+delete window.actualizarKPIs; 
 delete window.eliminarProducto;
 delete window.eliminarRegistro;
 delete window.filtrarHistorial;
