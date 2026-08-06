@@ -8,7 +8,431 @@ window.refreshRecepcion = null;
 
 window.recepcionGestionando = null;
 
+var adjuntosCommonRecepcion = window.AdjuntosCommon;
+var soportesRecepcionSeleccionados = [];
+window.recepcionesCacheSoportes = {};
+window.recepcionSoportesModalId = null;
 
+function notificarAdjuntosRecepcion(mensaje) {
+  if (typeof window.mostrarNotificacion === 'function') {
+    window.mostrarNotificacion('Soportes de recepción', mensaje, 'warning');
+  } else if (typeof notifAlert === 'function') {
+    notifAlert(mensaje);
+  } else {
+    alert(mensaje);
+  }
+}
+
+function totalSoportesRecepcion() {
+  return soportesRecepcionSeleccionados.length;
+}
+
+function agregarArchivosRecepcion(archivos) {
+  if (!adjuntosCommonRecepcion) {
+    notificarAdjuntosRecepcion('No cargó el componente común de adjuntos.');
+    return;
+  }
+
+  for (const archivo of Array.from(archivos || [])) {
+    if (totalSoportesRecepcion() >= adjuntosCommonRecepcion.MAX_ADJUNTOS) {
+      notificarAdjuntosRecepcion('Solo puede agregar hasta 10 soportes por recepción.');
+      break;
+    }
+
+    const validacion = adjuntosCommonRecepcion.validarArchivo(archivo);
+    if (!validacion.valido) {
+      notificarAdjuntosRecepcion(validacion.mensaje);
+      continue;
+    }
+
+    const duplicado = soportesRecepcionSeleccionados.some(function (item) {
+      return item.tipo === 'archivo' &&
+        item.archivo.name === archivo.name &&
+        item.archivo.size === archivo.size &&
+        item.archivo.lastModified === archivo.lastModified;
+    });
+
+    if (!duplicado) {
+      soportesRecepcionSeleccionados.push({
+        tipo: 'archivo',
+        archivo: archivo,
+        nombre: archivo.name,
+        mime: archivo.type || '',
+        tamano: archivo.size
+      });
+    }
+  }
+
+  renderSoportesRecepcionTemporales();
+}
+
+function agregarDriveRecepcion() {
+  const input = document.getElementById('driveLinkRecepcion');
+  if (!input || !adjuntosCommonRecepcion) return;
+
+  if (totalSoportesRecepcion() >= adjuntosCommonRecepcion.MAX_ADJUNTOS) {
+    notificarAdjuntosRecepcion('Solo puede agregar hasta 10 soportes por recepción.');
+    return;
+  }
+
+  const url = adjuntosCommonRecepcion.normalizarDriveUrl(input.value);
+  if (!url) {
+    notificarAdjuntosRecepcion('Pegue un enlace válido de Google Drive o Google Docs que comience por https://.');
+    return;
+  }
+
+  if (soportesRecepcionSeleccionados.some(function (item) { return item.url === url; })) {
+    notificarAdjuntosRecepcion('Ese enlace de Drive ya fue agregado.');
+    return;
+  }
+
+  soportesRecepcionSeleccionados.push({
+    tipo: 'drive',
+    nombre: adjuntosCommonRecepcion.nombreEnlaceDrive(url, totalSoportesRecepcion() + 1),
+    url: url,
+    mime: 'text/uri-list',
+    tamano: 0
+  });
+
+  input.value = '';
+  renderSoportesRecepcionTemporales();
+}
+
+function renderSoportesRecepcionTemporales() {
+  const lista = document.getElementById('listaSoportesRecepcion');
+  const contador = document.getElementById('contadorSoportesRecepcion');
+  if (!lista || !adjuntosCommonRecepcion) return;
+
+  if (contador) {
+    contador.textContent = `${totalSoportesRecepcion()} / ${adjuntosCommonRecepcion.MAX_ADJUNTOS}`;
+  }
+
+  if (soportesRecepcionSeleccionados.length === 0) {
+    lista.innerHTML = '<div class="adjunto-vacio">Aún no se han agregado soportes.</div>';
+    return;
+  }
+
+  lista.innerHTML = soportesRecepcionSeleccionados.map(function (soporte, index) {
+    const visual = adjuntosCommonRecepcion.tipoVisual(soporte);
+    const meta = soporte.tipo === 'drive'
+      ? visual.etiqueta
+      : `${visual.etiqueta} · ${adjuntosCommonRecepcion.formatearTamano(soporte.tamano)}`;
+
+    return `
+      <div class="adjunto-item">
+        <div class="adjunto-item__info">
+          <span class="adjunto-item__icono">${visual.icono}</span>
+          <div class="adjunto-item__texto">
+            <span class="adjunto-item__nombre">${adjuntosCommonRecepcion.escaparHTML(soporte.nombre)}</span>
+            <span class="adjunto-item__meta">${adjuntosCommonRecepcion.escaparHTML(meta)}</span>
+          </div>
+        </div>
+        <div class="adjunto-item__acciones">
+          <button type="button" class="adjunto-btn adjunto-btn--eliminar" onclick="eliminarSoporteRecepcionTemporal(${index})">Quitar</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+window.eliminarSoporteRecepcionTemporal = function (index) {
+  soportesRecepcionSeleccionados.splice(Number(index), 1);
+  renderSoportesRecepcionTemporales();
+};
+
+async function limpiarArchivosSubidosRecepcion(rutas) {
+  if (!rutas || rutas.length === 0) return;
+  try {
+    await window.supabaseClient.storage.from('recepciones-pdf').remove(rutas);
+  } catch (error) {
+    console.warn('No fue posible limpiar archivos huérfanos de recepción:', error);
+  }
+}
+
+async function subirSoportesRecepcion(listaSoportes = soportesRecepcionSeleccionados) {
+  const soportesGuardados = [];
+  const rutasSubidas = [];
+
+  for (const soporte of listaSoportes) {
+    if (soporte.tipo === 'drive') {
+      soportesGuardados.push({
+        tipo: 'drive',
+        nombre: soporte.nombre,
+        url: soporte.url,
+        ruta: '',
+        mime: 'text/uri-list',
+        tamano: 0
+      });
+      continue;
+    }
+
+    const archivo = soporte.archivo;
+    const limpio = String(archivo.name || 'soporte')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '_');
+    const identificador = window.crypto?.randomUUID
+      ? window.crypto.randomUUID()
+      : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const ruta = `recepciones/${identificador}_${limpio}`;
+
+    const subida = await window.supabaseClient
+      .storage
+      .from('recepciones-pdf')
+      .upload(ruta, archivo, { upsert: false, contentType: archivo.type || undefined });
+
+    if (subida.error) {
+      await limpiarArchivosSubidosRecepcion(rutasSubidas);
+      throw new Error(`No se pudo subir “${archivo.name}”: ${subida.error.message}`);
+    }
+
+    rutasSubidas.push(ruta);
+
+    const urlData = window.supabaseClient
+      .storage
+      .from('recepciones-pdf')
+      .getPublicUrl(ruta);
+
+    soportesGuardados.push({
+      tipo: 'archivo',
+      nombre: archivo.name,
+      url: urlData.data.publicUrl,
+      ruta: ruta,
+      mime: archivo.type || '',
+      tamano: archivo.size
+    });
+  }
+
+  return { soportesGuardados, rutasSubidas };
+}
+
+function puedeGestionarSoportesRecepcion() {
+  const usuario = String(window.usuarioLogueado?.usuario || '').toLowerCase();
+  const rol = String(window.usuarioLogueado?.rol || '').toLowerCase();
+  const rolPermitido = ['admin', 'auditor', 'lider', 'compras'].includes(usuario) ||
+    ['admin', 'auditor', 'lider', 'compras'].includes(rol);
+  const permiso = typeof window.tienePermiso === 'function' &&
+    (window.tienePermiso('recepcion', 'crear') || window.tienePermiso('recepcion', 'editar'));
+  return Boolean(rolPermitido || permiso);
+}
+
+async function consultarSoportesRecepcion(id) {
+  const consulta = await window.supabaseClient
+    .from('recepciones')
+    .select('pdf_url')
+    .eq('id', Number(id))
+    .single();
+
+  if (consulta.error) return { error: consulta.error, soportes: [] };
+  return {
+    error: null,
+    soportes: adjuntosCommonRecepcion.deserializarRecepcion(consulta.data?.pdf_url)
+  };
+}
+
+async function agregarSoportesRecepcionExistente(nuevos) {
+  const id = Number(window.recepcionSoportesModalId);
+  if (!id || !nuevos.length || !adjuntosCommonRecepcion) return;
+  if (!puedeGestionarSoportesRecepcion()) {
+    notificarAdjuntosRecepcion('No tiene permisos para agregar soportes a esta recepción.');
+    return;
+  }
+
+  const consulta = await consultarSoportesRecepcion(id);
+  if (consulta.error) {
+    notificarAdjuntosRecepcion('No fue posible consultar los soportes actuales: ' + consulta.error.message);
+    return;
+  }
+
+  const actuales = consulta.soportes;
+  const nuevosSinDuplicar = nuevos.filter(function (nuevo) {
+    return !(nuevo.tipo === 'drive' && actuales.some(function (actual) { return actual.url === nuevo.url; }));
+  });
+
+  if (actuales.length + nuevosSinDuplicar.length > adjuntosCommonRecepcion.MAX_ADJUNTOS) {
+    notificarAdjuntosRecepcion(`La recepción ya tiene ${actuales.length} soportes. El máximo permitido es 10.`);
+    return;
+  }
+  if (!nuevosSinDuplicar.length) {
+    notificarAdjuntosRecepcion('Los enlaces seleccionados ya estaban registrados.');
+    return;
+  }
+
+  let carga;
+  try {
+    carga = await subirSoportesRecepcion(nuevosSinDuplicar);
+  } catch (error) {
+    notificarAdjuntosRecepcion(error.message || 'No fue posible subir los soportes.');
+    return;
+  }
+
+  const combinados = actuales.concat(carga.soportesGuardados);
+  const actualizacion = await window.supabaseClient
+    .from('recepciones')
+    .update({ pdf_url: adjuntosCommonRecepcion.serializarRecepcion(combinados) })
+    .eq('id', id);
+
+  if (actualizacion.error) {
+    await limpiarArchivosSubidosRecepcion(carga.rutasSubidas);
+    notificarAdjuntosRecepcion('No fue posible actualizar la recepción: ' + actualizacion.error.message);
+    return;
+  }
+
+  if (typeof window.crearNotificacion === 'function') {
+    window.crearNotificacion(`📎 Se agregaron ${nuevosSinDuplicar.length} soporte(s) a la recepción #${id}.`);
+  }
+
+  await window.renderRecepciones();
+  window.verSoportesRecepcion(id);
+}
+
+async function cargarArchivosRecepcionModal(archivos) {
+  const actuales = window.recepcionesCacheSoportes[window.recepcionSoportesModalId] || [];
+  const disponibles = adjuntosCommonRecepcion.MAX_ADJUNTOS - actuales.length;
+  const nuevos = [];
+
+  for (const archivo of Array.from(archivos || [])) {
+    if (nuevos.length >= disponibles) {
+      notificarAdjuntosRecepcion(`Solo puede agregar ${Math.max(disponibles, 0)} soporte(s) más.`);
+      break;
+    }
+    const validacion = adjuntosCommonRecepcion.validarArchivo(archivo);
+    if (!validacion.valido) {
+      notificarAdjuntosRecepcion(validacion.mensaje);
+      continue;
+    }
+    nuevos.push({
+      tipo: 'archivo',
+      archivo,
+      nombre: archivo.name,
+      mime: archivo.type || '',
+      tamano: archivo.size
+    });
+  }
+
+  await agregarSoportesRecepcionExistente(nuevos);
+}
+
+async function cargarDriveRecepcionModal() {
+  const input = document.getElementById('driveLinkRecepcionModal');
+  if (!input || !adjuntosCommonRecepcion) return;
+
+  const url = adjuntosCommonRecepcion.normalizarDriveUrl(input.value);
+  if (!url) {
+    notificarAdjuntosRecepcion('Pegue un enlace válido de Google Drive o Google Docs que comience por https://.');
+    return;
+  }
+
+  const actuales = window.recepcionesCacheSoportes[window.recepcionSoportesModalId] || [];
+  const nuevo = {
+    tipo: 'drive',
+    nombre: adjuntosCommonRecepcion.nombreEnlaceDrive(url, actuales.length + 1),
+    url,
+    mime: 'text/uri-list',
+    tamano: 0
+  };
+  input.value = '';
+  await agregarSoportesRecepcionExistente([nuevo]);
+}
+
+window.eliminarSoporteRecepcionGuardado = async function (index) {
+  const id = Number(window.recepcionSoportesModalId);
+  if (!id || !adjuntosCommonRecepcion) return;
+  if (!puedeGestionarSoportesRecepcion()) {
+    notificarAdjuntosRecepcion('No tiene permisos para eliminar soportes.');
+    return;
+  }
+
+  const consulta = await consultarSoportesRecepcion(id);
+  if (consulta.error) {
+    notificarAdjuntosRecepcion('No fue posible consultar los soportes: ' + consulta.error.message);
+    return;
+  }
+
+  if (consulta.soportes.length <= adjuntosCommonRecepcion.MIN_ADJUNTOS) {
+    notificarAdjuntosRecepcion('La recepción debe conservar mínimo un soporte.');
+    return;
+  }
+
+  const soporte = consulta.soportes[Number(index)];
+  if (!soporte) return;
+
+  const confirmar = window.Notif && typeof window.Notif.confirm === 'function'
+    ? await window.Notif.confirm('El soporte se eliminará del registro.', '¿Eliminar soporte?')
+    : window.confirm('¿Eliminar soporte?');
+  if (!confirmar) return;
+
+  const restantes = consulta.soportes.filter(function (_, i) { return i !== Number(index); });
+  const actualizacion = await window.supabaseClient
+    .from('recepciones')
+    .update({ pdf_url: adjuntosCommonRecepcion.serializarRecepcion(restantes) })
+    .eq('id', id);
+
+  if (actualizacion.error) {
+    notificarAdjuntosRecepcion('No fue posible actualizar la recepción: ' + actualizacion.error.message);
+    return;
+  }
+
+  if (soporte.tipo === 'archivo' && soporte.ruta) {
+    const limpieza = await window.supabaseClient.storage.from('recepciones-pdf').remove([soporte.ruta]);
+    if (limpieza.error) console.warn('No se pudo eliminar el archivo físico:', limpieza.error);
+  }
+
+  if (typeof window.crearNotificacion === 'function') {
+    window.crearNotificacion(`🗑️ Se eliminó un soporte de la recepción #${id}.`);
+  }
+
+  await window.renderRecepciones();
+  window.verSoportesRecepcion(id);
+};
+
+function inicializarAdjuntosRecepcion() {
+  const inputArchivos = document.getElementById('pdfInput');
+  const btnArchivos = document.getElementById('btnAgregarSoportesRecepcion');
+  const btnDrive = document.getElementById('btnAgregarDriveRecepcion');
+  const inputDrive = document.getElementById('driveLinkRecepcion');
+
+  if (btnArchivos && inputArchivos) {
+    btnArchivos.onclick = function () { inputArchivos.click(); };
+    inputArchivos.onchange = function (evento) {
+      agregarArchivosRecepcion(evento.target.files);
+      evento.target.value = '';
+    };
+  }
+
+  if (btnDrive) btnDrive.onclick = agregarDriveRecepcion;
+  if (inputDrive) {
+    inputDrive.onkeydown = function (evento) {
+      if (evento.key === 'Enter') {
+        evento.preventDefault();
+        agregarDriveRecepcion();
+      }
+    };
+  }
+
+  const inputModal = document.getElementById('actualizarSoportesRecepcionInput');
+  const btnArchivosModal = document.getElementById('btnAgregarArchivosRecepcionModal');
+  const btnDriveModal = document.getElementById('btnAgregarDriveRecepcionModal');
+  const inputDriveModal = document.getElementById('driveLinkRecepcionModal');
+
+  if (btnArchivosModal && inputModal) {
+    btnArchivosModal.onclick = function () { inputModal.click(); };
+    inputModal.onchange = async function (evento) {
+      await cargarArchivosRecepcionModal(evento.target.files);
+      evento.target.value = '';
+    };
+  }
+  if (btnDriveModal) btnDriveModal.onclick = cargarDriveRecepcionModal;
+  if (inputDriveModal) {
+    inputDriveModal.onkeydown = function (evento) {
+      if (evento.key === 'Enter') {
+        evento.preventDefault();
+        cargarDriveRecepcionModal();
+      }
+    };
+  }
+
+  renderSoportesRecepcionTemporales();
+}
 
 
 
@@ -279,16 +703,6 @@ async function guardarRecepcion(){
 
 
 
-    const pdfFile =
-
-    document.getElementById(
-      'pdfInput'
-    ).files[0];
-
-
-
-
-
     if(
 
       !proveedor ||
@@ -307,7 +721,12 @@ async function guardarRecepcion(){
 
     }
 
-
+    if (!adjuntosCommonRecepcion ||
+        totalSoportesRecepcion() < adjuntosCommonRecepcion.MIN_ADJUNTOS ||
+        totalSoportesRecepcion() > adjuntosCommonRecepcion.MAX_ADJUNTOS) {
+      notificarAdjuntosRecepcion('Debe agregar entre 1 y 10 soportes antes de guardar la recepción.');
+      return;
+    }
 
 
 
@@ -323,91 +742,17 @@ async function guardarRecepcion(){
 
 
     let pdfUrl = '';
+    let rutasSubidasRecepcion = [];
 
-
-
-
-
-    // ======================
-    // SUBIR PDF
-    // ======================
-
-    if(pdfFile){
-
-      const nombreArchivo =
-
-      Date.now() +
-      '_' +
-      pdfFile.name;
-
-
-
-
-
-      const subida =
-
-      await window.supabaseClient
-
-      .storage
-
-      .from(
-        'recepciones-pdf'
-      )
-
-      .upload(
-
-        nombreArchivo,
-
-        pdfFile
-
-      );
-
-
-
-
-
-      if(subida.error){
-
-        console.log(
-          subida.error
-        );
-
-        notifAlert(
-          'Error subiendo PDF'
-        );
-
-        return;
-
-      }
-
-
-
-
-
-      const urlData =
-
-      window.supabaseClient
-
-      .storage
-
-      .from(
-        'recepciones-pdf'
-      )
-
-      .getPublicUrl(
-        nombreArchivo
-      );
-
-
-
-
-
-      pdfUrl =
-      urlData.data.publicUrl;
-
+    try {
+      const carga = await subirSoportesRecepcion();
+      rutasSubidasRecepcion = carga.rutasSubidas;
+      pdfUrl = adjuntosCommonRecepcion.serializarRecepcion(carga.soportesGuardados);
+    } catch (error) {
+      console.error(error);
+      notificarAdjuntosRecepcion(error.message || 'No fue posible subir los soportes.');
+      return;
     }
-
-
 
 
 
@@ -488,8 +833,10 @@ async function guardarRecepcion(){
         response.error
       );
 
+      await limpiarArchivosSubidosRecepcion(rutasSubidasRecepcion);
+
       notifAlert(
-        'Error guardando recepción'
+        'Error guardando recepción: ' + response.error.message
       );
 
       return;
@@ -612,7 +959,7 @@ window.renderRecepciones = async function(){
     const recepciones =
     response.data || [];
 
-
+    window.recepcionesCacheSoportes = {};
 
 
 
@@ -644,6 +991,10 @@ usuarioActual === 'auditor';
 
 
     recepciones.forEach(function(item){
+
+      window.recepcionesCacheSoportes[item.id] = adjuntosCommonRecepcion
+        ? adjuntosCommonRecepcion.deserializarRecepcion(item.pdf_url)
+        : [];
 
       let estadoClass = '';
 
@@ -789,10 +1140,10 @@ ${
   `
   <button
     class="btn-mini btn-pdf-mini"
-    title="Ver PDF"
-    onclick="window.open('${item.pdf_url}','_blank')"
+    title="Ver soportes"
+    onclick="window.verSoportesRecepcion(${item.id})"
   >
-    📄
+    📎
   </button>
   `
   :
@@ -1332,55 +1683,68 @@ window.eliminarRecepcion = async function(id){
 
   try{
 
-    const confirmar = await Notif.confirm(
-      'Esta acción no se puede deshacer.',
-      '¿Eliminar recepción?'
-    );
-
-
-
-
+    const confirmar = window.Notif && typeof window.Notif.confirm === 'function'
+      ? await window.Notif.confirm(
+          'Esta acción no se puede deshacer.',
+          '¿Eliminar recepción?'
+        )
+      : window.confirm('¿Eliminar recepción?');
 
     if(!confirmar){
-
       return;
-
     }
 
+    const consulta = await window.supabaseClient
+      .from('recepciones')
+      .select('pdf_url')
+      .eq('id', Number(id))
+      .single();
 
+    if (consulta.error) {
+      notifAlert('No fue posible consultar los soportes: ' + consulta.error.message);
+      return;
+    }
 
+    const eliminacion = await window.supabaseClient
+      .from('recepciones')
+      .delete()
+      .eq('id', Number(id));
 
+    if (eliminacion.error) {
+      notifAlert('No fue posible eliminar la recepción: ' + eliminacion.error.message);
+      return;
+    }
 
-    await window.supabaseClient
+    const soportes = adjuntosCommonRecepcion
+      ? adjuntosCommonRecepcion.deserializarRecepcion(consulta.data?.pdf_url)
+      : [];
+    const rutas = soportes
+      .filter(function (soporte) { return soporte.tipo === 'archivo' && soporte.ruta; })
+      .map(function (soporte) { return soporte.ruta; });
 
-    .from('recepciones')
+    if (rutas.length > 0) {
+      const limpieza = await window.supabaseClient
+        .storage
+        .from('recepciones-pdf')
+        .remove(rutas);
+      if (limpieza.error) {
+        console.warn('La recepción se eliminó, pero algunos archivos no pudieron limpiarse:', limpieza.error);
+      }
+    }
 
-    .delete()
-
-    .eq(
-
-      'id',
-
-      Number(id)
-
-    );
-await window.renderRecepciones();
-
-await window.actualizarKPIsRecepcion();
-
-await window.actualizarDashboardRecepcion();
+    await window.renderRecepciones();
+    await window.actualizarKPIsRecepcion();
+    await window.actualizarDashboardRecepcion();
+    notifAlert('Recepción eliminada correctamente');
 
   }
 
   catch(error){
-
     console.log(error);
-
+    notifAlert(error.message || 'No fue posible eliminar la recepción');
   }
 
 };
-
-
 
 
 
@@ -1589,14 +1953,76 @@ function limpiarFormulario(){
     'observacionInput'
   ).value = '';
 
-  document.getElementById(
-    'pdfInput'
-  ).value = '';
+  const inputSoportes = document.getElementById('pdfInput');
+  if (inputSoportes) inputSoportes.value = '';
+
+  const inputDrive = document.getElementById('driveLinkRecepcion');
+  if (inputDrive) inputDrive.value = '';
+
+  soportesRecepcionSeleccionados = [];
+  renderSoportesRecepcionTemporales();
 
 }
 
 
 
+
+
+// ======================
+// VER SOPORTES RECEPCIÓN
+// ======================
+
+window.verSoportesRecepcion = function (id) {
+  const modal = document.getElementById('modalSoportesRecepcion');
+  const contenido = document.getElementById('contenidoSoportesRecepcion');
+  const contador = document.getElementById('contadorSoportesRecepcionModal');
+  if (!modal || !contenido || !adjuntosCommonRecepcion) return;
+
+  window.recepcionSoportesModalId = Number(id);
+  const soportes = window.recepcionesCacheSoportes[id] || [];
+  if (contador) contador.textContent = `${soportes.length} / ${adjuntosCommonRecepcion.MAX_ADJUNTOS}`;
+
+  const puedeGestionar = puedeGestionarSoportesRecepcion();
+  if (soportes.length === 0) {
+    contenido.innerHTML = '<div class="adjunto-vacio">Esta recepción no tiene soportes registrados.</div>';
+  } else {
+    contenido.innerHTML = `<div class="adjuntos-lista">${soportes.map(function (soporte, index) {
+      const visual = adjuntosCommonRecepcion.tipoVisual(soporte);
+      const meta = soporte.tipo === 'drive'
+        ? 'Google Drive'
+        : `${visual.etiqueta}${soporte.tamano ? ' · ' + adjuntosCommonRecepcion.formatearTamano(soporte.tamano) : ''}`;
+      const url = adjuntosCommonRecepcion.escaparHTML(soporte.url);
+      return `
+        <div class="adjunto-item">
+          <div class="adjunto-item__info">
+            <span class="adjunto-item__icono">${visual.icono}</span>
+            <div class="adjunto-item__texto">
+              <span class="adjunto-item__nombre">${adjuntosCommonRecepcion.escaparHTML(soporte.nombre)}</span>
+              <span class="adjunto-item__meta">${adjuntosCommonRecepcion.escaparHTML(meta)}</span>
+            </div>
+          </div>
+          <div class="adjunto-item__acciones">
+            <button type="button" class="adjunto-btn adjunto-btn--abrir" data-url="${url}">Abrir</button>
+            ${puedeGestionar ? `<button type="button" class="adjunto-btn adjunto-btn--eliminar" onclick="eliminarSoporteRecepcionGuardado(${index})">Eliminar</button>` : ''}
+          </div>
+        </div>`;
+    }).join('')}</div>`;
+
+    contenido.querySelectorAll('[data-url]').forEach(function (boton) {
+      boton.onclick = function () {
+        window.open(boton.dataset.url, '_blank', 'noopener,noreferrer');
+      };
+    });
+  }
+
+  const panelAgregar = document.getElementById('btnAgregarArchivosRecepcionModal')?.closest('.adjuntos-panel');
+  if (panelAgregar) panelAgregar.style.display = puedeGestionar ? 'grid' : 'none';
+  modal.classList.add('active');
+};
+
+window.cerrarModalSoportesRecepcion = function () {
+  document.getElementById('modalSoportesRecepcion')?.classList.remove('active');
+};
 
 
 // ======================
@@ -1920,6 +2346,7 @@ if(
 // INICIO
 // ======================
 
+inicializarAdjuntosRecepcion();
 window.renderRecepciones();
 
 window.actualizarKPIsRecepcion();

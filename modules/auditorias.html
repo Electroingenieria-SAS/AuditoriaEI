@@ -166,7 +166,7 @@
 
                 <p class="section-description">
 
-                    PDF y archivos Excel relacionados con la auditoría.
+                    Entre 1 y 10 imágenes, PDF, videos o enlaces de Google Drive.
 
                 </p>
 
@@ -196,7 +196,7 @@
 
                 type="file"
 
-                accept=".pdf,.xlsx,.xls"
+                accept="image/*,application/pdf,video/*,.heic,.heif,.mov,.m4v,.mkv,.xlsx,.xls,.csv,.doc,.docx,.txt"
 
                 multiple
 
@@ -214,10 +214,30 @@
 
             >
 
-                <span class="btn-icon">＋</span> Agregar Documento
+                <span class="btn-icon">＋</span> Seleccionar Archivos
 
             </button>
 
+        </div>
+
+        <div class="adjuntos-link-row">
+            <input
+                id="driveLinkAuditoria"
+                type="url"
+                placeholder="Pegue un enlace de Google Drive"
+            >
+            <button
+                id="btnAgregarDriveAuditoria"
+                class="btn-secondary"
+                type="button"
+            >
+                Agregar Enlace
+            </button>
+        </div>
+
+        <div class="adjuntos-panel__header">
+            <p class="adjuntos-ayuda">Formatos: imágenes, PDF, Office y video. Máximo 100 MB por archivo.</p>
+            <span class="adjuntos-contador" id="contadorDocumentosAuditoria">0 / 10</span>
         </div>
 
     </div>
@@ -449,12 +469,29 @@
 
         </div>
 
-      <input
-    type="file"
-    id="actualizarDocumentoInput"
-    accept=".pdf,.xlsx,.xls"
-    hidden
->
+        <div class="adjuntos-panel" style="margin-top:14px;">
+            <div class="adjuntos-panel__header">
+                <div>
+                    <strong>Agregar más soportes</strong>
+                    <p>El total de la auditoría no puede superar 10.</p>
+                </div>
+                <span class="adjuntos-contador" id="contadorDocumentosModal">0 / 10</span>
+            </div>
+            <div class="adjuntos-acciones">
+                <input
+                    type="file"
+                    id="actualizarDocumentoInput"
+                    accept="image/*,application/pdf,video/*,.heic,.heif,.mov,.m4v,.mkv,.xlsx,.xls,.csv,.doc,.docx,.txt"
+                    multiple
+                    hidden
+                >
+                <button type="button" id="btnAgregarArchivoModal" class="btn-secondary">＋ Seleccionar archivos</button>
+            </div>
+            <div class="adjuntos-link-row">
+                <input type="url" id="driveLinkModalAuditoria" placeholder="Pegue un enlace de Google Drive">
+                <button type="button" id="btnAgregarDriveModal" class="btn-secondary">Agregar enlace</button>
+            </div>
+        </div>
 
     </div>
 
@@ -575,15 +612,37 @@
 
         </div>
 
-        <div class="input-group">
+        <div class="input-group textarea-group">
 
-            <label>Reemplazar Documento (opcional)</label>
+            <div class="adjuntos-panel">
+                <div class="adjuntos-panel__header">
+                    <div>
+                        <strong>Agregar soportes</strong>
+                        <p>Los soportes nuevos se anexan a los existentes, sin reemplazarlos.</p>
+                    </div>
+                    <span class="adjuntos-contador" id="contadorDocumentosEdicion">0 nuevos</span>
+                </div>
 
-            <input
-                type="file"
-                id="editarDocumento"
-                accept=".pdf,.xlsx,.xls"
-            >
+                <div class="adjuntos-acciones">
+                    <input
+                        type="file"
+                        id="editarDocumento"
+                        accept="image/*,application/pdf,video/*,.heic,.heif,.mov,.m4v,.mkv,.xlsx,.xls,.csv,.doc,.docx,.txt"
+                        multiple
+                        hidden
+                    >
+                    <button type="button" id="btnAgregarDocumentoEdicion" class="btn-secondary">＋ Seleccionar archivos</button>
+                </div>
+
+                <div class="adjuntos-link-row">
+                    <input type="url" id="driveLinkEdicionAuditoria" placeholder="Pegue un enlace de Google Drive">
+                    <button type="button" id="btnAgregarDriveEdicion" class="btn-secondary">Agregar enlace</button>
+                </div>
+
+                <div id="listaDocumentosEdicion" class="adjuntos-lista">
+                    <div class="adjunto-vacio">No hay soportes nuevos seleccionados.</div>
+                </div>
+            </div>
 
         </div>
 

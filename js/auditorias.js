@@ -45,7 +45,9 @@ if (window.refreshAuditoriasInterval) {
     "descargarDocumento",
     "cargarAuditorias",
     "filtrarAuditorias",
-    "eliminarDocumentoTemporal"
+    "eliminarDocumentoTemporal",
+    "eliminarDocumentoEdicionTemporal",
+    "eliminarDocumentoAuditoria"
 ].forEach(function (nombre) {
     delete window[nombre];
 });
@@ -58,7 +60,8 @@ if (window.refreshAuditoriasInterval) {
 const AUDITORIAS_BUCKET = "auditorias";
 const AUDITORIAS_TABLA = "auditorias";
 const DOCUMENTOS_TABLA = "auditoria_documentos";
-const EXTENSIONES_PERMITIDAS = ["pdf", "xlsx", "xls"];
+const ADJUNTOS_AUDITORIA = window.AdjuntosCommon;
+const PREFIJO_DRIVE = "drive::";
 
 // Cache de la última consulta (usada por el buscador/filtro)
 let auditoriasCache = [];
@@ -66,6 +69,9 @@ let auditoriasCache = [];
 // Documentos seleccionados en el formulario de CREACIÓN
 // (aún no subidos a Storage)
 let documentosSeleccionados = [];
+let documentosEdicionSeleccionados = [];
+let auditoriaDocumentosModalId = null;
+window.documentosAuditoriaModalCache = {};
 
 // Snapshot de la auditoría que se está editando actualmente,
 // se usa para poder comparar "antes" vs "después" y así
@@ -92,11 +98,25 @@ function asignarValor(id, valor) {
 }
 
 function obtenerExtension(nombreArchivo) {
-    return nombreArchivo.split(".").pop().toLowerCase();
+    return ADJUNTOS_AUDITORIA
+        ? ADJUNTOS_AUDITORIA.obtenerExtension(nombreArchivo)
+        : String(nombreArchivo || "").split(".").pop().toLowerCase();
 }
 
-function extensionValida(nombreArchivo) {
-    return EXTENSIONES_PERMITIDAS.includes(obtenerExtension(nombreArchivo));
+function esRutaDrive(ruta) {
+    return String(ruta || "").startsWith(PREFIJO_DRIVE);
+}
+
+function obtenerUrlDrive(ruta) {
+    return esRutaDrive(ruta) ? String(ruta).slice(PREFIJO_DRIVE.length) : "";
+}
+
+function notificarAdjuntosAuditoria(mensaje, tipo = "warning") {
+    if (typeof window.mostrarNotificacion === "function") {
+        window.mostrarNotificacion("Soportes de auditoría", mensaje, tipo);
+    } else if (typeof notifAlert === "function") {
+        notifAlert(mensaje);
+    }
 }
 
 function formatearFecha(fecha) {
@@ -218,7 +238,7 @@ function generarCambios(anterior, nuevo, huboDocumentoNuevo) {
     }
 
     if (huboDocumentoNuevo) {
-        cambios.push("Se reemplazó el documento adjunto.");
+        cambios.push("Se agregaron nuevos soportes documentales.");
     }
 
     return cambios;
@@ -226,113 +246,220 @@ function generarCambios(anterior, nuevo, huboDocumentoNuevo) {
 
 
 // ==========================================================
-// 5. DOCUMENTOS TEMPORALES (formulario de creación)
+// 5. SOPORTES TEMPORALES Y GESTIÓN DOCUMENTAL
 // ==========================================================
 
 const btnGuardarAuditoria = obtenerElemento("guardarAuditoria");
 const btnAgregarDocumento = obtenerElemento("btnAgregarDocumento");
 const documentoInput = obtenerElemento("documentoInput");
 const listaDocumentos = obtenerElemento("listaDocumentos");
+const btnAgregarDriveAuditoria = obtenerElemento("btnAgregarDriveAuditoria");
+const driveLinkAuditoria = obtenerElemento("driveLinkAuditoria");
 
-if (btnGuardarAuditoria) {
-    btnGuardarAuditoria.onclick = guardarAuditoria;
+if (btnGuardarAuditoria) btnGuardarAuditoria.onclick = guardarAuditoria;
+if (btnAgregarDocumento && documentoInput) {
+    btnAgregarDocumento.onclick = function () { documentoInput.click(); };
 }
-
-if (btnAgregarDocumento) {
-    btnAgregarDocumento.onclick = function () {
-        documentoInput.click();
+if (documentoInput) {
+    documentoInput.onchange = function (evento) {
+        agregarArchivosALista(evento.target.files, documentosSeleccionados, renderDocumentos);
+        evento.target.value = "";
+    };
+}
+if (btnAgregarDriveAuditoria) {
+    btnAgregarDriveAuditoria.onclick = function () {
+        agregarDriveALista(driveLinkAuditoria, documentosSeleccionados, renderDocumentos);
+    };
+}
+if (driveLinkAuditoria) {
+    driveLinkAuditoria.onkeydown = function (evento) {
+        if (evento.key === "Enter") {
+            evento.preventDefault();
+            agregarDriveALista(driveLinkAuditoria, documentosSeleccionados, renderDocumentos);
+        }
     };
 }
 
-if (documentoInput) {
-    documentoInput.onchange = agregarDocumentos;
-}
-
-function agregarDocumentos(e) {
-    const archivos = [...e.target.files];
-
-    archivos.forEach(function (archivo) {
-        if (!extensionValida(archivo.name)) {
-            window.mostrarNotificacion
-                ? window.mostrarNotificacion("Archivo no válido", "Solo se permiten archivos PDF o Excel.", "warning")
-                : notifAlert("Solo se permiten archivos PDF o Excel.");
-            return;
-        }
-
-        documentosSeleccionados.push(archivo);
-    });
-
-    renderDocumentos();
-    documentoInput.value = "";
-}
-
-function renderDocumentos() {
-    if (!listaDocumentos) return;
-
-    if (documentosSeleccionados.length === 0) {
-        listaDocumentos.innerHTML = `
-            <div class="documento-vacio">
-                📄 Ningún documento agregado.
-            </div>
-        `;
+function agregarArchivosALista(archivos, destino, render) {
+    if (!ADJUNTOS_AUDITORIA) {
+        notificarAdjuntosAuditoria("No cargó el componente común de adjuntos.");
         return;
     }
 
-    listaDocumentos.innerHTML = documentosSeleccionados.map(function (doc, index) {
-        const extension = obtenerExtension(doc.name).toUpperCase();
+    for (const archivo of Array.from(archivos || [])) {
+        if (destino.length >= ADJUNTOS_AUDITORIA.MAX_ADJUNTOS) {
+            notificarAdjuntosAuditoria("Solo puede seleccionar hasta 10 soportes.");
+            break;
+        }
 
-        return `
-            <div class="documento-item">
-                <div class="documento-info">
-                    <div class="documento-nombre">📄 ${doc.name}</div>
-                    <div class="documento-tipo">
-                        ${extension} · ${(doc.size / 1024).toFixed(1)} KB
-                    </div>
-                </div>
-                <div class="documento-acciones">
-                    <button class="btn-eliminar" onclick="eliminarDocumentoTemporal(${index})">🗑</button>
+        const validacion = ADJUNTOS_AUDITORIA.validarArchivo(archivo);
+        if (!validacion.valido) {
+            notificarAdjuntosAuditoria(validacion.mensaje);
+            continue;
+        }
+
+        const duplicado = destino.some(function (item) {
+            return item.tipo === "archivo" &&
+                item.archivo.name === archivo.name &&
+                item.archivo.size === archivo.size &&
+                item.archivo.lastModified === archivo.lastModified;
+        });
+
+        if (!duplicado) {
+            destino.push({
+                tipo: "archivo",
+                archivo,
+                nombre: archivo.name,
+                mime: archivo.type || "",
+                tamano: archivo.size
+            });
+        }
+    }
+
+    render();
+}
+
+function agregarDriveALista(input, destino, render) {
+    if (!input || !ADJUNTOS_AUDITORIA) return;
+    if (destino.length >= ADJUNTOS_AUDITORIA.MAX_ADJUNTOS) {
+        notificarAdjuntosAuditoria("Solo puede seleccionar hasta 10 soportes.");
+        return;
+    }
+
+    const url = ADJUNTOS_AUDITORIA.normalizarDriveUrl(input.value);
+    if (!url) {
+        notificarAdjuntosAuditoria("Pegue un enlace válido de Google Drive o Google Docs que comience por https://.");
+        return;
+    }
+
+    if (destino.some(function (item) { return item.url === url; })) {
+        notificarAdjuntosAuditoria("Ese enlace de Drive ya fue agregado.");
+        return;
+    }
+
+    destino.push({
+        tipo: "drive",
+        nombre: ADJUNTOS_AUDITORIA.nombreEnlaceDrive(url, destino.length + 1),
+        url,
+        mime: "text/uri-list",
+        tamano: 0
+    });
+    input.value = "";
+    render();
+}
+
+function htmlSoporteTemporal(soporte, index, funcionEliminar) {
+    const visual = ADJUNTOS_AUDITORIA.tipoVisual(soporte);
+    const meta = soporte.tipo === "drive"
+        ? "Google Drive"
+        : `${visual.etiqueta} · ${ADJUNTOS_AUDITORIA.formatearTamano(soporte.tamano)}`;
+
+    return `
+        <div class="adjunto-item">
+            <div class="adjunto-item__info">
+                <span class="adjunto-item__icono">${visual.icono}</span>
+                <div class="adjunto-item__texto">
+                    <span class="adjunto-item__nombre">${ADJUNTOS_AUDITORIA.escaparHTML(soporte.nombre)}</span>
+                    <span class="adjunto-item__meta">${ADJUNTOS_AUDITORIA.escaparHTML(meta)}</span>
                 </div>
             </div>
-        `;
-    }).join("");
+            <div class="adjunto-item__acciones">
+                <button type="button" class="adjunto-btn adjunto-btn--eliminar" onclick="${funcionEliminar}(${index})">Quitar</button>
+            </div>
+        </div>`;
+}
+
+function renderDocumentos() {
+    if (!listaDocumentos || !ADJUNTOS_AUDITORIA) return;
+    const contador = obtenerElemento("contadorDocumentosAuditoria");
+    if (contador) contador.textContent = `${documentosSeleccionados.length} / ${ADJUNTOS_AUDITORIA.MAX_ADJUNTOS}`;
+
+    listaDocumentos.innerHTML = documentosSeleccionados.length
+        ? documentosSeleccionados.map(function (doc, index) {
+            return htmlSoporteTemporal(doc, index, "eliminarDocumentoTemporal");
+        }).join("")
+        : '<div class="documento-vacio">📄 Ningún soporte agregado.</div>';
 }
 
 window.eliminarDocumentoTemporal = function (index) {
-    documentosSeleccionados.splice(index, 1);
+    documentosSeleccionados.splice(Number(index), 1);
     renderDocumentos();
+};
+
+function renderDocumentosEdicion() {
+    const lista = obtenerElemento("listaDocumentosEdicion");
+    const contador = obtenerElemento("contadorDocumentosEdicion");
+    if (!lista || !ADJUNTOS_AUDITORIA) return;
+
+    if (contador) contador.textContent = `${documentosEdicionSeleccionados.length} nuevos`;
+    lista.innerHTML = documentosEdicionSeleccionados.length
+        ? documentosEdicionSeleccionados.map(function (doc, index) {
+            return htmlSoporteTemporal(doc, index, "eliminarDocumentoEdicionTemporal");
+        }).join("")
+        : '<div class="adjunto-vacio">No hay soportes nuevos seleccionados.</div>';
+}
+
+window.eliminarDocumentoEdicionTemporal = function (index) {
+    documentosEdicionSeleccionados.splice(Number(index), 1);
+    renderDocumentosEdicion();
 };
 
 function limpiarDocumentos() {
     documentosSeleccionados = [];
+    if (driveLinkAuditoria) driveLinkAuditoria.value = "";
     renderDocumentos();
 }
 
-
-// ==========================================================
-// 6. STORAGE: SUBIR / ELIMINAR / REEMPLAZAR DOCUMENTOS
-// ==========================================================
-// Estas funciones son el corazón de la gestión documental y
-// son usadas tanto en la creación como en la edición, evitando
-// duplicar lógica de Storage + tabla `auditoria_documentos`.
-
-function generarRutaStorage(auditoriaId, nombreArchivo) {
-    const nombreStorage = Date.now() + "_" + nombreArchivo;
-    return `${auditoriaId}/${nombreStorage}`;
+function limpiarDocumentosEdicion() {
+    documentosEdicionSeleccionados = [];
+    const inputArchivo = obtenerElemento("editarDocumento");
+    const inputDrive = obtenerElemento("driveLinkEdicionAuditoria");
+    if (inputArchivo) inputArchivo.value = "";
+    if (inputDrive) inputDrive.value = "";
+    renderDocumentosEdicion();
 }
 
-// Sube un archivo físico a Storage y crea su registro en BD.
-// Devuelve { error } si algo falla, o { data } si todo sale bien.
-async function subirDocumento(auditoriaId, archivo) {
-    const rutaStorage = generarRutaStorage(auditoriaId, archivo.name);
+// ==========================================================
+// 6. STORAGE Y TABLA auditoria_documentos
+// ==========================================================
 
+function generarRutaStorage(auditoriaId, nombreArchivo) {
+    const limpio = String(nombreArchivo || "soporte")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9._-]/g, "_");
+    const identificador = window.crypto?.randomUUID
+        ? window.crypto.randomUUID()
+        : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    return `${auditoriaId}/${identificador}_${limpio}`;
+}
+
+async function subirDocumento(auditoriaId, soporte) {
+    if (soporte.tipo === "drive") {
+        return window.supabaseClient
+            .from(DOCUMENTOS_TABLA)
+            .insert([{
+                auditoria_id: auditoriaId,
+                nombre_archivo: soporte.nombre,
+                ruta_storage: PREFIJO_DRIVE + soporte.url,
+                tipo_archivo: "DRIVE",
+                tamano: 0
+            }])
+            .select()
+            .single();
+    }
+
+    const archivo = soporte.archivo || soporte;
+    const validacion = ADJUNTOS_AUDITORIA.validarArchivo(archivo);
+    if (!validacion.valido) return { error: new Error(validacion.mensaje) };
+
+    const rutaStorage = generarRutaStorage(auditoriaId, archivo.name);
     const subida = await window.supabaseClient
         .storage
         .from(AUDITORIAS_BUCKET)
-        .upload(rutaStorage, archivo);
+        .upload(rutaStorage, archivo, { upsert: false, contentType: archivo.type || undefined });
 
-    if (subida.error) {
-        return { error: subida.error };
-    }
+    if (subida.error) return { error: subida.error };
 
     const registro = await window.supabaseClient
         .from(DOCUMENTOS_TABLA)
@@ -347,13 +474,13 @@ async function subirDocumento(auditoriaId, archivo) {
         .single();
 
     if (registro.error) {
+        await window.supabaseClient.storage.from(AUDITORIAS_BUCKET).remove([rutaStorage]);
         return { error: registro.error };
     }
 
     return { data: registro.data };
 }
 
-// Obtiene TODOS los documentos vigentes de una auditoría.
 async function obtenerDocumentosDeAuditoria(auditoriaId) {
     return window.supabaseClient
         .from(DOCUMENTOS_TABLA)
@@ -362,56 +489,47 @@ async function obtenerDocumentosDeAuditoria(auditoriaId) {
         .order("id");
 }
 
-// Elimina del Storage y de la tabla todos los documentos
-// indicados. Se usa para garantizar la regla de negocio de
-// "un único documento vigente" antes de subir uno nuevo.
 async function eliminarDocumentos(documentos) {
     if (!documentos || documentos.length === 0) return;
 
-    const rutas = documentos.map(function (doc) {
-        return doc.ruta_storage;
-    });
+    const rutas = documentos
+        .map(function (doc) { return doc.ruta_storage; })
+        .filter(function (ruta) { return ruta && !esRutaDrive(ruta); });
 
-    await window.supabaseClient
-        .storage
-        .from(AUDITORIAS_BUCKET)
-        .remove(rutas);
+    if (rutas.length) {
+        await window.supabaseClient.storage.from(AUDITORIAS_BUCKET).remove(rutas);
+    }
 
-    const ids = documentos.map(function (doc) {
-        return doc.id;
-    });
+    const ids = documentos.map(function (doc) { return doc.id; });
+    await window.supabaseClient.from(DOCUMENTOS_TABLA).delete().in("id", ids);
+}
 
-    await window.supabaseClient
+async function contarDocumentosAuditoria(auditoriaId) {
+    const { count, error } = await window.supabaseClient
         .from(DOCUMENTOS_TABLA)
-        .delete()
-        .in("id", ids);
+        .select("id", { count: "exact", head: true })
+        .eq("auditoria_id", auditoriaId);
+    return { count: Number(count || 0), error };
 }
 
-// Reemplaza el/los documento(s) vigentes de una auditoría por
-// uno nuevo: elimina lo anterior (Storage + BD) y sube el
-// archivo nuevo. Devuelve { error } o { data }.
-async function reemplazarDocumento(auditoriaId, archivoNuevo) {
-    const { data: documentosActuales, error: errorConsulta } =
-        await obtenerDocumentosDeAuditoria(auditoriaId);
-
-    if (errorConsulta) {
-        return { error: errorConsulta };
+async function agregarSoportesDirectos(auditoriaId, soportes) {
+    const conteo = await contarDocumentosAuditoria(auditoriaId);
+    if (conteo.error) return { error: conteo.error };
+    if (conteo.count + soportes.length > ADJUNTOS_AUDITORIA.MAX_ADJUNTOS) {
+        return { error: new Error(`La auditoría ya tiene ${conteo.count} soportes. El máximo permitido es 10.`) };
     }
 
-    const subida = await subirDocumento(auditoriaId, archivoNuevo);
-
-    if (subida.error) {
-        return { error: subida.error };
+    const guardados = [];
+    for (const soporte of soportes) {
+        const resultado = await subirDocumento(auditoriaId, soporte);
+        if (resultado.error) {
+            await eliminarDocumentos(guardados);
+            return { error: resultado.error };
+        }
+        guardados.push(resultado.data);
     }
-
-    // Solo se elimina lo anterior DESPUÉS de confirmar que el
-    // nuevo documento quedó subido y registrado correctamente,
-    // así nunca se pierde el archivo si algo falla a mitad de camino.
-    await eliminarDocumentos(documentosActuales);
-
-    return { data: subida.data };
+    return { data: guardados };
 }
-
 
 // ==========================================================
 // 7. CRUD AUDITORÍAS
@@ -441,6 +559,13 @@ async function guardarAuditoria() {
             return;
         }
 
+        if (!ADJUNTOS_AUDITORIA ||
+            documentosSeleccionados.length < ADJUNTOS_AUDITORIA.MIN_ADJUNTOS ||
+            documentosSeleccionados.length > ADJUNTOS_AUDITORIA.MAX_ADJUNTOS) {
+            notificarAdjuntosAuditoria("Debe agregar entre 1 y 10 soportes antes de guardar la auditoría.");
+            return;
+        }
+
         const { data, error } = await window.supabaseClient
             .from(AUDITORIAS_TABLA)
             .insert([{ tipo, nombre, proceso, responsable, estado, fecha, observaciones }])
@@ -453,14 +578,15 @@ async function guardarAuditoria() {
         }
 
         const auditoriaId = data.id;
+        const resultadoSoportes = await agregarSoportesDirectos(auditoriaId, documentosSeleccionados);
 
-        for (const archivo of documentosSeleccionados) {
-            const resultado = await subirDocumento(auditoriaId, archivo);
-
-            if (resultado.error) {
-                manejarErrorSupabase(resultado.error, "Error subiendo documento: " + resultado.error.message);
-                return;
-            }
+        if (resultadoSoportes.error) {
+            await window.supabaseClient.from(AUDITORIAS_TABLA).delete().eq("id", auditoriaId);
+            manejarErrorSupabase(
+                resultadoSoportes.error,
+                "No fue posible guardar los soportes: " + resultadoSoportes.error.message
+            );
+            return;
         }
 
         await registrarEvento(
@@ -583,67 +709,194 @@ window.filtrarAuditorias = function () {
 window.verDocumentos = async function (id) {
     try {
         const lista = obtenerElemento("listaDocumentosModal");
-        if (!lista) return;
+        const contador = obtenerElemento("contadorDocumentosModal");
+        if (!lista || !ADJUNTOS_AUDITORIA) return;
 
-        lista.innerHTML = "";
+        auditoriaDocumentosModalId = Number(id);
+        lista.innerHTML = '<div class="adjunto-vacio">Cargando soportes...</div>';
 
         const { data, error } = await obtenerDocumentosDeAuditoria(id);
-
         if (error) {
-            manejarErrorSupabase(error, "Error consultando documentos.");
+            manejarErrorSupabase(error, "Error consultando los soportes.");
             return;
         }
 
-        if (!data || data.length === 0) {
-            lista.innerHTML = `
-                <p style="text-align:center;padding:20px;">
-                    No existen documentos para esta auditoría.
-                </p>
-            `;
-            abrirModal("modalDocumentos");
-            return;
-        }
+        const documentos = data || [];
+        window.documentosAuditoriaModalCache = {};
+        documentos.forEach(function (doc) {
+            window.documentosAuditoriaModalCache[doc.id] = doc;
+        });
 
-        lista.innerHTML = data.map(function (doc) {
-            return `
-                <div class="documento-storage">
-                    <div>
-                        <strong>📄 ${doc.nombre_archivo}</strong>
-                        <br>
-                        ${doc.tipo_archivo}
-                    </div>
-                    <div class="acciones-documento">
-                        <button class="btn-primary" onclick="descargarDocumento('${doc.ruta_storage}')">
-                            📥 Descargar
-                        </button>
-                    </div>
-                </div>
-            `;
-        }).join("");
+        if (contador) contador.textContent = `${documentos.length} / ${ADJUNTOS_AUDITORIA.MAX_ADJUNTOS}`;
+
+        const puedeEditar = window.tienePermiso("auditorias", "editar");
+        const panelAgregar = obtenerElemento("btnAgregarArchivoModal")?.closest(".adjuntos-panel");
+        if (panelAgregar) panelAgregar.style.display = puedeEditar ? "grid" : "none";
+
+        if (documentos.length === 0) {
+            lista.innerHTML = '<div class="adjunto-vacio">No existen soportes para esta auditoría. Agregue al menos uno.</div>';
+        } else {
+            lista.innerHTML = documentos.map(function (doc) {
+                const esDrive = esRutaDrive(doc.ruta_storage);
+                const mime = String(doc.tipo_archivo || "").toLowerCase();
+                const soporteVisual = {
+                    tipo: esDrive ? "drive" : "archivo",
+                    mime,
+                    nombre: doc.nombre_archivo,
+                    tamano: doc.tamano
+                };
+                const visual = ADJUNTOS_AUDITORIA.tipoVisual(soporteVisual);
+                const meta = esDrive
+                    ? "Google Drive"
+                    : `${visual.etiqueta}${doc.tamano ? " · " + ADJUNTOS_AUDITORIA.formatearTamano(doc.tamano) : ""}`;
+
+                return `
+                    <div class="adjunto-item">
+                        <div class="adjunto-item__info">
+                            <span class="adjunto-item__icono">${visual.icono}</span>
+                            <div class="adjunto-item__texto">
+                                <span class="adjunto-item__nombre">${ADJUNTOS_AUDITORIA.escaparHTML(doc.nombre_archivo)}</span>
+                                <span class="adjunto-item__meta">${ADJUNTOS_AUDITORIA.escaparHTML(meta)}</span>
+                            </div>
+                        </div>
+                        <div class="adjunto-item__acciones">
+                            <button type="button" class="adjunto-btn adjunto-btn--abrir" onclick="descargarDocumento(${doc.id})">Abrir</button>
+                            ${puedeEditar ? `<button type="button" class="adjunto-btn adjunto-btn--eliminar" onclick="eliminarDocumentoAuditoria(${doc.id}, ${Number(id)})">Eliminar</button>` : ""}
+                        </div>
+                    </div>`;
+            }).join("");
+        }
 
         abrirModal("modalDocumentos");
     } catch (error) {
-        console.error("Error inesperado:", error);
+        manejarErrorSupabase(error, "Ocurrió un error consultando los soportes.");
     }
 };
 
-window.descargarDocumento = async function (ruta) {
+window.descargarDocumento = async function (documentoId) {
     try {
-        const { data, error } = await window.supabaseClient
-            .storage
-            .from(AUDITORIAS_BUCKET)
-            .createSignedUrl(ruta, 60);
-
-        if (error) {
-            manejarErrorSupabase(error, "No fue posible generar el enlace de descarga.");
+        const doc = window.documentosAuditoriaModalCache[Number(documentoId)];
+        if (!doc) {
+            notificarAdjuntosAuditoria("No se encontró el soporte seleccionado.");
             return;
         }
 
-        window.open(data.signedUrl, "_blank");
+        if (esRutaDrive(doc.ruta_storage)) {
+            window.open(obtenerUrlDrive(doc.ruta_storage), "_blank", "noopener,noreferrer");
+            return;
+        }
+
+        const { data, error } = await window.supabaseClient
+            .storage
+            .from(AUDITORIAS_BUCKET)
+            .createSignedUrl(doc.ruta_storage, 300);
+
+        if (error) {
+            manejarErrorSupabase(error, "No fue posible generar el enlace de apertura.");
+            return;
+        }
+
+        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
     } catch (error) {
-        console.error(error);
+        manejarErrorSupabase(error, "No fue posible abrir el soporte.");
     }
 };
+
+window.eliminarDocumentoAuditoria = async function (documentoId, auditoriaId) {
+    try {
+        if (!window.tienePermiso("auditorias", "editar")) {
+            notificarAdjuntosAuditoria("No tiene permisos para eliminar soportes.");
+            return;
+        }
+
+        const conteo = await contarDocumentosAuditoria(auditoriaId);
+        if (conteo.error) {
+            manejarErrorSupabase(conteo.error, "No fue posible validar la cantidad de soportes.");
+            return;
+        }
+        if (conteo.count <= ADJUNTOS_AUDITORIA.MIN_ADJUNTOS) {
+            notificarAdjuntosAuditoria("La auditoría debe conservar mínimo un soporte.");
+            return;
+        }
+
+        const doc = window.documentosAuditoriaModalCache[Number(documentoId)];
+        if (!doc) return;
+
+        const confirmar = window.Notif && typeof window.Notif.confirm === "function"
+            ? await window.Notif.confirm("El soporte se eliminará definitivamente.", "¿Eliminar soporte?")
+            : window.confirm("¿Eliminar soporte?");
+        if (!confirmar) return;
+
+        await eliminarDocumentos([doc]);
+        await registrarEvento("ELIMINAR", `Se eliminó el soporte “${doc.nombre_archivo}” de la auditoría ${auditoriaId}.`);
+        await window.verDocumentos(auditoriaId);
+    } catch (error) {
+        manejarErrorSupabase(error, "No fue posible eliminar el soporte.");
+    }
+};
+
+async function cargarArchivosDesdeModal(archivos) {
+    if (!auditoriaDocumentosModalId) return;
+    if (!window.tienePermiso("auditorias", "editar")) {
+        notificarAdjuntosAuditoria("No tiene permisos para agregar soportes.");
+        return;
+    }
+    const temporales = [];
+    agregarArchivosALista(archivos, temporales, function () {});
+    if (!temporales.length) return;
+
+    const resultado = await agregarSoportesDirectos(auditoriaDocumentosModalId, temporales);
+    if (resultado.error) {
+        manejarErrorSupabase(resultado.error, resultado.error.message);
+        return;
+    }
+
+    await registrarEvento("EDITAR", `Se agregaron ${temporales.length} soporte(s) a la auditoría ${auditoriaDocumentosModalId}.`);
+    await window.verDocumentos(auditoriaDocumentosModalId);
+}
+
+async function cargarDriveDesdeModal() {
+    if (!window.tienePermiso("auditorias", "editar")) {
+        notificarAdjuntosAuditoria("No tiene permisos para agregar soportes.");
+        return;
+    }
+    const input = obtenerElemento("driveLinkModalAuditoria");
+    if (!input || !auditoriaDocumentosModalId) return;
+    const temporales = [];
+    agregarDriveALista(input, temporales, function () {});
+    if (!temporales.length) return;
+
+    const resultado = await agregarSoportesDirectos(auditoriaDocumentosModalId, temporales);
+    if (resultado.error) {
+        manejarErrorSupabase(resultado.error, resultado.error.message);
+        return;
+    }
+
+    await registrarEvento("EDITAR", `Se agregó un enlace de Drive a la auditoría ${auditoriaDocumentosModalId}.`);
+    await window.verDocumentos(auditoriaDocumentosModalId);
+}
+
+const actualizarDocumentoInput = obtenerElemento("actualizarDocumentoInput");
+const btnAgregarArchivoModal = obtenerElemento("btnAgregarArchivoModal");
+const btnAgregarDriveModal = obtenerElemento("btnAgregarDriveModal");
+const driveLinkModalAuditoria = obtenerElemento("driveLinkModalAuditoria");
+
+if (btnAgregarArchivoModal && actualizarDocumentoInput) {
+    btnAgregarArchivoModal.onclick = function () { actualizarDocumentoInput.click(); };
+    actualizarDocumentoInput.onchange = async function (evento) {
+        await cargarArchivosDesdeModal(evento.target.files);
+        evento.target.value = "";
+    };
+}
+if (btnAgregarDriveModal) btnAgregarDriveModal.onclick = cargarDriveDesdeModal;
+if (driveLinkModalAuditoria) {
+    driveLinkModalAuditoria.onkeydown = function (evento) {
+        if (evento.key === "Enter") {
+            evento.preventDefault();
+            cargarDriveDesdeModal();
+        }
+    };
+}
 
 configurarCierreModal("modalDocumentos", "cerrarModalDocumentos");
 
@@ -654,7 +907,7 @@ configurarCierreModal("modalDocumentos", "cerrarModalDocumentos");
 // Único punto de edición: datos generales + documento.
 // Flujo al guardar (ver guardarCambiosAuditoria):
 //   1. Actualizar tabla `auditorias`
-//   2. Si hay archivo nuevo -> reemplazarDocumento()
+//   2. Agregar soportes nuevos sin reemplazar los existentes
 //   3. Registrar historial (granular, por campo modificado)
 //   4. Notificar
 //   5. Cerrar modal + recargar tabla
@@ -685,9 +938,7 @@ window.abrirEditarAuditoria = async function (id) {
         asignarValor("editarFecha", data.fecha);
         asignarValor("editarObservaciones", data.observaciones || "");
 
-        const inputDocumento = obtenerElemento("editarDocumento");
-        if (inputDocumento) inputDocumento.value = "";
-
+        limpiarDocumentosEdicion();
         abrirModal("modalEditarAuditoria");
     } catch (error) {
         console.error(error);
@@ -699,6 +950,32 @@ configurarCierreModal("modalEditarAuditoria", "cerrarEditarAuditoria");
 const guardarEdicionAuditoria = obtenerElemento("guardarEdicionAuditoria");
 if (guardarEdicionAuditoria) {
     guardarEdicionAuditoria.onclick = guardarCambiosAuditoria;
+}
+
+const editarDocumentoInput = obtenerElemento("editarDocumento");
+const btnAgregarDocumentoEdicion = obtenerElemento("btnAgregarDocumentoEdicion");
+const btnAgregarDriveEdicion = obtenerElemento("btnAgregarDriveEdicion");
+const driveLinkEdicionAuditoria = obtenerElemento("driveLinkEdicionAuditoria");
+
+if (btnAgregarDocumentoEdicion && editarDocumentoInput) {
+    btnAgregarDocumentoEdicion.onclick = function () { editarDocumentoInput.click(); };
+    editarDocumentoInput.onchange = function (evento) {
+        agregarArchivosALista(evento.target.files, documentosEdicionSeleccionados, renderDocumentosEdicion);
+        evento.target.value = "";
+    };
+}
+if (btnAgregarDriveEdicion) {
+    btnAgregarDriveEdicion.onclick = function () {
+        agregarDriveALista(driveLinkEdicionAuditoria, documentosEdicionSeleccionados, renderDocumentosEdicion);
+    };
+}
+if (driveLinkEdicionAuditoria) {
+    driveLinkEdicionAuditoria.onkeydown = function (evento) {
+        if (evento.key === "Enter") {
+            evento.preventDefault();
+            agregarDriveALista(driveLinkEdicionAuditoria, documentosEdicionSeleccionados, renderDocumentosEdicion);
+        }
+    };
 }
 
 async function guardarCambiosAuditoria() {
@@ -728,13 +1005,15 @@ async function guardarCambiosAuditoria() {
             return;
         }
 
-        const inputDocumento = obtenerElemento("editarDocumento");
-        const archivoNuevo = inputDocumento && inputDocumento.files[0];
+        const conteoActual = await contarDocumentosAuditoria(id);
+        if (conteoActual.error) {
+            manejarErrorSupabase(conteoActual.error, "No fue posible validar los soportes actuales.");
+            return;
+        }
 
-        if (archivoNuevo && !extensionValida(archivoNuevo.name)) {
-            window.mostrarNotificacion
-                ? window.mostrarNotificacion("Archivo no válido", "Solo se permiten archivos PDF o Excel.", "warning")
-                : notifAlert("Solo se permiten archivos PDF o Excel.");
+        const totalFinal = conteoActual.count + documentosEdicionSeleccionados.length;
+        if (totalFinal < ADJUNTOS_AUDITORIA.MIN_ADJUNTOS || totalFinal > ADJUNTOS_AUDITORIA.MAX_ADJUNTOS) {
+            notificarAdjuntosAuditoria(`La auditoría debe conservar entre 1 y 10 soportes. Total previsto: ${totalFinal}.`);
             return;
         }
 
@@ -749,18 +1028,21 @@ async function guardarCambiosAuditoria() {
             return;
         }
 
-        // 2. Reemplazar documento si el usuario seleccionó uno nuevo
-        if (archivoNuevo) {
-            const resultado = await reemplazarDocumento(id, archivoNuevo);
-
+        // 2. Agregar soportes nuevos sin reemplazar los existentes
+        if (documentosEdicionSeleccionados.length > 0) {
+            const resultado = await agregarSoportesDirectos(id, documentosEdicionSeleccionados);
             if (resultado.error) {
-                manejarErrorSupabase(resultado.error, "Error reemplazando el documento: " + resultado.error.message);
+                manejarErrorSupabase(resultado.error, "Error agregando soportes: " + resultado.error.message);
                 return;
             }
         }
 
         // 3 y 4. Historial + notificaciones (granular por campo)
-        const cambios = generarCambios(auditoriaEnEdicion, datosNuevos, Boolean(archivoNuevo));
+        const cambios = generarCambios(
+            auditoriaEnEdicion,
+            datosNuevos,
+            documentosEdicionSeleccionados.length > 0
+        );
 
         if (cambios.length === 0) {
             await registrarEvento(
@@ -780,7 +1062,7 @@ async function guardarCambiosAuditoria() {
 
         // 5. Cerrar modal + recargar tabla
         cerrarModal("modalEditarAuditoria");
-        if (inputDocumento) inputDocumento.value = "";
+        limpiarDocumentosEdicion();
         auditoriaEnEdicion = null;
 
         await window.cargarAuditorias();
@@ -952,6 +1234,9 @@ function aplicarPermisosAuditorias() {
 // ==========================================================
 // 13. INICIALIZACIÓN DEL MÓDULO
 // ==========================================================
+
+renderDocumentos();
+renderDocumentosEdicion();
 
 function cargarFechaActual() {
     const fecha = obtenerElemento("fechaInput");

@@ -324,19 +324,62 @@
 
     </div>
 
-    <!-- PDF -->
+    <!-- SOPORTES DOCUMENTALES -->
 
-    <div class="input-group">
+    <div class="input-group textarea-group">
 
-      <label>
-        Adjuntar PDF / Remisión
-      </label>
+      <div class="adjuntos-panel">
 
-      <input
-        type="file"
-        id="pdfInput"
-        accept=".pdf"
-      >
+        <div class="adjuntos-panel__header">
+          <div>
+            <strong>Soportes de la recepción</strong>
+            <p>Adjunte entre 1 y 10 imágenes, PDF, videos o enlaces de Google Drive.</p>
+          </div>
+          <span class="adjuntos-contador" id="contadorSoportesRecepcion">0 / 10</span>
+        </div>
+
+        <div class="adjuntos-acciones">
+          <input
+            type="file"
+            id="pdfInput"
+            accept="image/*,application/pdf,video/*,.heic,.heif,.mov,.m4v,.mkv"
+            multiple
+            hidden
+          >
+
+          <button
+            type="button"
+            id="btnAgregarSoportesRecepcion"
+            class="btn-secondary"
+          >
+            ＋ Seleccionar archivos
+          </button>
+        </div>
+
+        <div class="adjuntos-link-row">
+          <input
+            type="url"
+            id="driveLinkRecepcion"
+            placeholder="Pegue un enlace de Google Drive"
+          >
+          <button
+            type="button"
+            id="btnAgregarDriveRecepcion"
+            class="btn-secondary"
+          >
+            Agregar enlace
+          </button>
+        </div>
+
+        <div id="listaSoportesRecepcion" class="adjuntos-lista">
+          <div class="adjunto-vacio">Aún no se han agregado soportes.</div>
+        </div>
+
+        <p class="adjuntos-ayuda">
+          Formatos admitidos: imágenes, PDF y video. Tamaño máximo por archivo: 100 MB.
+        </p>
+
+      </div>
 
     </div>
 
@@ -594,6 +637,60 @@
       class="modal-observacion-body"
       id="contenidoObservacion"
     >
+    </div>
+
+  </div>
+
+</div>
+
+
+<div class="modal-observacion" id="modalSoportesRecepcion">
+
+  <div class="modal-observacion-content">
+
+    <div class="modal-observacion-header">
+
+      <h2>📎 Soportes de la Recepción</h2>
+
+      <button
+        class="cerrar-modal-btn"
+        onclick="cerrarModalSoportesRecepcion()"
+      >
+        ✕
+      </button>
+
+    </div>
+
+    <div
+      class="modal-observacion-body"
+      id="contenidoSoportesRecepcion"
+    >
+    </div>
+
+    <div class="adjuntos-panel" style="margin: 0 18px 18px;">
+      <div class="adjuntos-panel__header">
+        <div>
+          <strong>Agregar más soportes</strong>
+          <p>Puede completar el registro hasta llegar a 10 soportes.</p>
+        </div>
+        <span class="adjuntos-contador" id="contadorSoportesRecepcionModal">0 / 10</span>
+      </div>
+
+      <div class="adjuntos-acciones">
+        <input
+          type="file"
+          id="actualizarSoportesRecepcionInput"
+          accept="image/*,application/pdf,video/*,.heic,.heif,.mov,.m4v,.mkv"
+          multiple
+          hidden
+        >
+        <button type="button" id="btnAgregarArchivosRecepcionModal" class="btn-secondary">＋ Seleccionar archivos</button>
+      </div>
+
+      <div class="adjuntos-link-row">
+        <input type="url" id="driveLinkRecepcionModal" placeholder="Pegue un enlace de Google Drive">
+        <button type="button" id="btnAgregarDriveRecepcionModal" class="btn-secondary">Agregar enlace</button>
+      </div>
     </div>
 
   </div>
