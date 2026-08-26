@@ -1,3 +1,25 @@
+# ERP de Auditoría, Inventario y Gestión Logística
+
+Plataforma integral para el control de inventarios, recepción de mercancías, auditorías documentales y confiabilidad
+
+## 🚀 Requisitos Previos
+- Servidor Web (Nginx, Apache, LiteSpeed o Hosting compartido con soporte SSL).
+- Proyecto configurado en **Supabase** (PostgreSQL 15+).
+
+## 🛠️ Instalación y Despliegue
+
+1. **Configuración de Base de Datos:**
+   - Ejecuta los scripts de la carpeta `supabase/migrations/` en el SQL Editor de Supabase en orden cronológico (`001` a `005`).
+   - Verifica la creación de los buckets de Storage: `recepciones-pdf` y `auditorias`.
+
+2. **Configuración del Cliente:**
+   - Edita `js/supabaseClient.js` con la URL y Anon Key correspondientes a tu instancia de producción:
+   ```javascript
+   window.supabaseClient = window.supabase.createClient(
+     'https://TU_PROYECTO.supabase.co',
+     'TU_ANON_KEY'
+   );
+
 # Auditoría EI — Actualización de soportes documentales
 
 **Versión documentada:** 1.1.0  

@@ -5,11 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard de Inventario</title>
 
-<!-- Reutiliza los estilos generales del ERP -->
-<link rel="stylesheet" href="inventario.css">
+<!-- ESTILOS -->
+<link rel="stylesheet" href="css/styles.css">
+<link rel="stylesheet" href="css/inventario.css">
 <link rel="stylesheet" href="inventario_graficos.css">
-  <link rel="stylesheet" href="css/styles.css">
-  <link rel="stylesheet" href="css/inventario.css">
+<link rel="stylesheet" href="css/notificaciones-premium.css">
 
 </head>
 <body>
@@ -138,8 +138,7 @@
             <th>Estado</th>
           </tr>
         </thead>
-        <tbody id="dashboardHistorialBody">
-        </tbody>
+        <tbody id="dashboardHistorialBody"></tbody>
       </table>
 
     </div>
@@ -148,26 +147,19 @@
 
 </div>
 
-<!-- Librerías -->
+<!-- ===================================== -->
+<!-- LIBRERIAS EXTERNAS (CDN) -->
+<!-- ===================================== -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<link rel="stylesheet" href="css/notificaciones-premium.css">
-<script src="js/notificaciones.js"></script>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script>
-  // Misma conexión Supabase que usa el resto del ERP,
-  // para que el dashboard lea el inventario real (no localStorage).
-  window.supabaseClient = window.supabase.createClient(
-    'https://hurxdjoiafkjoyrmyhbd.supabase.co',
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1cnhkam9pYWZram95cm15aGJkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MzgxMTMsImV4cCI6MjA5NTMxNDExM30.Z6fRiWft3eSEVNZbWflmcvVcHAJTAEA37tPdp4LRnTg'
-  );
-</script>
 
-<!-- Si tu ERP usa además un archivo de permisos compartido, agrégalo aquí -->
-<!-- <script src="permisos.js"></script> -->
-
+<!-- ===================================== -->
+<!-- SCRIPTS DEL SISTEMA -->
+<!-- ===================================== -->
+<script src="js/supabaseClient.js"></script>
+<script src="js/notificaciones.js"></script>
 <script src="inventario_graficos.js"></script>
 
 </body>
