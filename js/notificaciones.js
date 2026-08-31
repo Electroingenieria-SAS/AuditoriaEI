@@ -1,22 +1,25 @@
 // =====================================================
-// SISTEMA DE NOTIFICACIONES PREMIUM - GLOBAL
-// Reemplaza alert() / confirm() / prompt() en TODOS
-// los modulos: inventario, auditorias, confiabilidad,
-// recepcion, usuarios, bi, login, dashboard.
+// SISTEMA DE NOTIFICACIONES PREMIUM - GLOBAL (PRO)
+// Reemplaza alert() / confirm() / prompt() en TODOS los módulos.
 //
 // API:
 //   Notif.success(mensaje, titulo)
 //   Notif.error(mensaje, titulo)
 //   Notif.warning(mensaje, titulo)
 //   Notif.info(mensaje, titulo)
-//   Notif.confirm(mensaje, titulo)      -> Promise<boolean>
-//   Notif.prompt(mensaje, titulo, valorInicial, opciones) -> Promise<string|null>
+//   Notif.confirm(mensaje, titulo)                          -> Promise<boolean>
+//   Notif.prompt(mensaje, titulo, valorInicial, opciones)   -> Promise<string|null>
 //
-// Compatibilidad: window.mostrarNotificacion(titulo, mensaje, tipo)
-// sigue funcionando igual que antes.
+// Métodos de Integración ERP:
+//   window.crearNotificacion(mensaje, tipo, titulo)         -> Guarda en historial, actualiza campana y lanza Toast
+//   window.mostrarNotificacion(titulo, mensaje, tipo)
+//   window.notifAlert(mensaje)
 // =====================================================
 
 (function(){
+
+  const STORAGE_KEY = 'notificaciones';
+  const MAX_HISTORIAL = 50;
 
   const ICONOS = {
     success: '✅',
@@ -35,22 +38,16 @@
   const DURACION_MS = 4200;
 
   // ===================================================
-  // INYECTAR CONTENEDORES SI NO EXISTEN (no requiere
-  // tocar el HTML de cada modulo)
+  // 1. INYECTAR CONTENEDORES SI NO EXISTEN
   // ===================================================
-
   function asegurarContenedores(){
-
     if(!document.getElementById('notifStack')){
-
       const stack = document.createElement('div');
       stack.id = 'notifStack';
       document.body.appendChild(stack);
-
     }
 
     if(!document.getElementById('notifModalOverlay')){
-
       const overlay = document.createElement('div');
       overlay.id = 'notifModalOverlay';
 
@@ -61,72 +58,88 @@
           '<p id="notifModalMensaje"></p>' +
           '<div id="notifModalCampoWrap"></div>' +
           '<div class="notif-modal-botones">' +
-            '<button class="notif-btn-cancelar" id="notifBtnCancelar">Cancelar</button>' +
-            '<button class="notif-btn-aceptar" id="notifBtnAceptar">Aceptar</button>' +
+            '<button class="notif-btn-cancelar" id="notifBtnCancelar" type="button">Cancelar</button>' +
+            '<button class="notif-btn-aceptar" id="notifBtnAceptar" type="button">Aceptar</button>' +
           '</div>' +
         '</div>';
 
       document.body.appendChild(overlay);
-
     }
 
-    // Cargar el CSS premium automaticamente si el modulo no lo incluyo
+    // Cargar el CSS premium automáticamente si no está en el head
     if(!document.getElementById('notifPremiumCSS')){
-
       const link = document.createElement('link');
       link.id = 'notifPremiumCSS';
       link.rel = 'stylesheet';
 
-      // Detecta si estamos dentro de /modules/ para ajustar la ruta relativa
       const enSubcarpeta = window.location.pathname.includes('/modules/');
-
-      link.href =
-      (enSubcarpeta ? '../css/' : 'css/') +
-      'notificaciones-premium.css';
+      link.href = (enSubcarpeta ? '../css/' : 'css/') + 'notificaciones-premium.css';
 
       document.head.appendChild(link);
-
     }
-
   }
 
   // ===================================================
-  // TOAST (reemplaza alert)
+  // 2. PERSISTENCIA EN LOCALSTORAGE & CAMPANA ERP
   // ===================================================
+  function obtenerHistorial(){
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
 
+  function guardarHistorial(lista){
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(lista.slice(0, MAX_HISTORIAL)));
+    } catch(e) {
+      console.warn('No se pudo guardar el historial de notificaciones:', e);
+    }
+  }
+
+  window.actualizarContadorCampana = function(){
+    const contador = document.getElementById('contadorNotificaciones') || document.getElementById('notificacionesCount');
+    if(!contador) return;
+
+    const lista = obtenerHistorial();
+    const noLeidas = lista.filter(n => !n.leida).length;
+
+    contador.innerText = noLeidas;
+    contador.style.display = noLeidas > 0 ? 'inline-flex' : 'none';
+  };
+
+  // ===================================================
+  // 3. TOAST VISUAL
+  // ===================================================
   function toast(tipo, mensaje, titulo){
-
     asegurarContenedores();
 
     const stack = document.getElementById('notifStack');
+    if(!stack) return;
 
     const el = document.createElement('div');
     el.className = 'notif-toast notif-' + tipo;
 
     el.innerHTML =
-      '<div class="notif-icono">' + ICONOS[tipo] + '</div>' +
+      '<div class="notif-icono">' + (ICONOS[tipo] || 'ℹ️') + '</div>' +
       '<div class="notif-texto">' +
-        '<div class="notif-titulo">' + (titulo || TITULOS_DEFECTO[tipo]) + '</div>' +
+        '<div class="notif-titulo">' + (titulo || TITULOS_DEFECTO[tipo] || 'Notificación') + '</div>' +
         '<div class="notif-mensaje"></div>' +
       '</div>' +
-      '<button class="notif-cerrar">✕</button>' +
+      '<button class="notif-cerrar" type="button">✕</button>' +
       '<div class="notif-barra" style="animation-duration:' + DURACION_MS + 'ms"></div>';
 
-    // innerText para evitar inyeccion de HTML en el mensaje
-    el.querySelector('.notif-mensaje').innerText = mensaje;
-
+    el.querySelector('.notif-mensaje').innerText = mensaje || '';
     stack.appendChild(el);
 
     function cerrar(){
-
       el.classList.add('notif-out');
-
       setTimeout(function(){
         if(el.parentNode){
           el.parentNode.removeChild(el);
         }
       }, 350);
-
     }
 
     el.querySelector('.notif-cerrar').addEventListener('click', cerrar);
@@ -138,19 +151,50 @@
       const barra = el.querySelector('.notif-barra');
       if(barra){ barra.style.animationPlayState = 'paused'; }
     });
-
   }
 
   // ===================================================
-  // MODAL BASE (usado por confirm y prompt)
+  // 4. CREAR NOTIFICACIÓN (PUENTE CAMPANA + TOAST)
   // ===================================================
+  window.crearNotificacion = function(mensaje, tipo, titulo){
+    tipo = tipo || 'info';
+    titulo = titulo || (tipo === 'success' ? 'Éxito' : tipo === 'error' ? 'Error' : 'Notificación del Sistema');
 
+    try {
+      const lista = obtenerHistorial();
+      const nueva = {
+        id: Date.now(),
+        titulo: titulo,
+        mensaje: String(mensaje || ''),
+        tipo: tipo,
+        leida: false,
+        fecha: new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })
+      };
+
+      lista.unshift(nueva);
+      guardarHistorial(lista);
+      window.actualizarContadorCampana();
+
+      if(typeof window.renderNotificaciones === 'function'){
+        window.renderNotificaciones();
+      }
+
+      window.dispatchEvent(new CustomEvent('nuevaNotificacion', { detail: nueva }));
+    } catch(err) {
+      console.error('Error registrando notificación en el historial:', err);
+    }
+
+    // Disparar toast visual
+    toast(tipo, mensaje, titulo);
+  };
+
+  // ===================================================
+  // 5. MODAL BASE (CONFIRM & PROMPT)
+  // ===================================================
   function abrirModal(config){
-
     asegurarContenedores();
 
     return new Promise(function(resolve){
-
       const overlay = document.getElementById('notifModalOverlay');
       const icono = document.getElementById('notifModalIcono');
       const titulo = document.getElementById('notifModalTitulo');
@@ -172,32 +216,23 @@
       let campo = null;
 
       if(config.tipoInput){
-
         if(config.tipoInput === 'select' && config.opciones){
-
           campo = document.createElement('select');
-
           config.opciones.forEach(function(op){
-
             const opt = document.createElement('option');
             opt.value = op;
             opt.innerText = op;
+            if(op === config.valorInicial) opt.selected = true;
             campo.appendChild(opt);
-
           });
-
         }
         else{
-
           campo = document.createElement('input');
           campo.type = config.tipoInput === 'password' ? 'password' : 'text';
           campo.value = config.valorInicial || '';
           campo.placeholder = config.placeholder || '';
-
         }
-
         campoWrap.appendChild(campo);
-
       }
 
       btnCancelar.style.display = config.soloAceptar ? 'none' : 'inline-block';
@@ -214,62 +249,48 @@
       }
 
       function limpiar(){
-
         overlay.classList.remove('active');
         btnAceptar.removeEventListener('click', onAceptar);
         btnCancelar.removeEventListener('click', onCancelar);
         overlay.removeEventListener('keydown', onKeyDown);
-
       }
 
       function onAceptar(){
-
         const valor = campo ? campo.value : true;
         limpiar();
         resolve(valor);
-
       }
 
       function onCancelar(){
-
         limpiar();
         resolve(config.tipoInput ? null : false);
-
       }
 
       function onKeyDown(e){
-
         if(e.key === 'Enter'){
           onAceptar();
         }
-
         if(e.key === 'Escape'){
           onCancelar();
         }
-
       }
 
       btnAceptar.addEventListener('click', onAceptar);
       btnCancelar.addEventListener('click', onCancelar);
       overlay.addEventListener('keydown', onKeyDown);
-
     });
-
   }
 
   // ===================================================
-  // API PUBLICA
+  // 6. API PÚBLICA
   // ===================================================
-
   window.Notif = {
-
     success: function(mensaje, titulo){ toast('success', mensaje, titulo); },
     error:   function(mensaje, titulo){ toast('error', mensaje, titulo); },
     warning: function(mensaje, titulo){ toast('warning', mensaje, titulo); },
     info:    function(mensaje, titulo){ toast('info', mensaje, titulo); },
 
     confirm: function(mensaje, titulo){
-
       return abrirModal({
         mensaje: mensaje,
         titulo: titulo || '¿Estás seguro?',
@@ -279,11 +300,9 @@
         textoAceptar: 'Sí, continuar',
         textoCancelar: 'Cancelar'
       });
-
     },
 
     prompt: function(mensaje, titulo, valorInicial, opciones){
-
       return abrirModal({
         mensaje: mensaje,
         titulo: titulo || 'Ingrese un valor',
@@ -296,57 +315,45 @@
         textoAceptar: 'Guardar',
         textoCancelar: 'Cancelar'
       });
-
     }
-
   };
 
   // ===================================================
-  // FUNCION GLOBAL DE AYUDA: reemplazo directo de alert()
+  // 7. COMPATIBILIDAD CON FUNCIONES GLOBALES
   // ===================================================
-
   window.notifAlert = function(mensaje){
-
     let tipo = 'info';
-
     const texto = String(mensaje).toLowerCase();
 
-    if(texto.indexOf('error') !== -1 || texto.indexOf('❌') !== -1 || texto.indexOf('no se pudo') !== -1 || texto.indexOf('inválid') !== -1 || texto.indexOf('invalid') !== -1 || texto.indexOf('incorrect') !== -1 || texto.indexOf('faltante') !== -1 || texto.indexOf('debe ') !== -1 || texto.indexOf('requerid') !== -1){
+    if(texto.includes('error') || texto.includes('❌') || texto.includes('no se pudo') || texto.includes('inválid') || texto.includes('invalid') || texto.includes('incorrect') || texto.includes('faltante') || texto.includes('debe ') || texto.includes('requerid')){
       tipo = 'error';
     }
-    else if(texto.indexOf('correctamente') !== -1 || texto.indexOf('exitosa') !== -1 || texto.indexOf('exitoso') !== -1 || texto.indexOf('guardad') !== -1 || texto.indexOf('actualizad') !== -1 || texto.indexOf('eliminad') !== -1 || texto.indexOf('creado') !== -1 || texto.indexOf('registrad') !== -1 || texto.indexOf('✅') !== -1){
+    else if(texto.includes('correctamente') || texto.includes('exitosa') || texto.includes('exitoso') || texto.includes('guardad') || texto.includes('actualizad') || texto.includes('eliminad') || texto.includes('creado') || texto.includes('registrad') || texto.includes('✅')){
       tipo = 'success';
     }
-    else if(texto.indexOf('cuidado') !== -1 || texto.indexOf('advertencia') !== -1 || texto.indexOf('⚠') !== -1 || texto.indexOf('atención') !== -1 || texto.indexOf('atencion') !== -1){
+    else if(texto.includes('cuidado') || texto.includes('advertencia') || texto.includes('⚠') || texto.includes('atención') || texto.includes('atencion')){
       tipo = 'warning';
     }
 
     toast(tipo, mensaje);
-
   };
-
-  // ===================================================
-  // COMPATIBILIDAD CON EL SISTEMA ANTERIOR
-  // ===================================================
 
   window.mostrarNotificacion = function(titulo, mensaje, tipo){
-
-    tipo = tipo || 'success';
-
-    if(!ICONOS[tipo]){
-      tipo = 'info';
-    }
-
+    tipo = tipo || 'info';
+    if(!ICONOS[tipo]) tipo = 'info';
     toast(tipo, mensaje, titulo);
-
   };
 
-  // Crear los contenedores apenas cargue el script
+  // Inicialización automática
   if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', asegurarContenedores);
+    document.addEventListener('DOMContentLoaded', function(){
+      asegurarContenedores();
+      window.actualizarContadorCampana();
+    });
   }
   else{
     asegurarContenedores();
+    window.actualizarContadorCampana();
   }
 
 })();
