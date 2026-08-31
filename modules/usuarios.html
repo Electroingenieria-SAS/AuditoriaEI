@@ -1,292 +1,269 @@
 <!-- ===================================== -->
-<!-- USUARIOS Y PERMISOS -->
+<!-- CONTROL DE ACCESO & USUARIOS (HUD PRO) -->
 <!-- ===================================== -->
 
 <div class="module-container">
 
-  <!-- ==========================================
-       HEADER
-  =========================================== -->
-  <div class="module-header">
-    <div>
-      <h2>👥 Usuarios</h2>
-      <p>Administración de usuarios y permisos</p>
+  <!-- HEADER TECNOLÓGICO -->
+  <header class="module-header">
+    <div class="header-info">
+      <div class="header-badge">
+        <span class="live-dot"></span> IAM GATEWAY & ROLES
+      </div>
+      <h2>Centro de Usuarios & Privilegios</h2>
+      <p>Gestión de identidades, jerarquías de rol y matriz de control de acceso granular (RBAC).</p>
     </div>
-  </div>
+  </header>
 
-  <!-- ==========================================
-       FORMULARIO CREAR USUARIO
-  =========================================== -->
-  <div class="module-card">
-    <h3>Crear Usuario</h3>
+  <!-- FORMULARIO CREAR USUARIO / CREDENCIALES -->
+  <section class="module-card">
+    <div class="card-title-bar">
+      <div class="title-left">
+        <div class="cyber-cube"></div>
+        <h3>Registrar Nueva Identidad</h3>
+      </div>
+      <span class="card-tag">CREDENCIALES PRIMARIAS</span>
+    </div>
 
     <div class="form-grid">
-
       <!-- USUARIO -->
       <div class="input-group">
-        <label>Usuario</label>
-        <input
-          type="text"
-          id="usuarioInput"
-          placeholder="Ingrese usuario"
-        >
+        <label for="usuarioInput">IDENTIFICADOR / USUARIO</label>
+        <div class="input-wrapper">
+          <input
+            type="text"
+            id="usuarioInput"
+            placeholder="ej. carlos.audit"
+            autocomplete="off"
+            maxlength="35"
+          >
+        </div>
       </div>
 
       <!-- PASSWORD -->
       <div class="input-group">
-        <label>Contraseña</label>
-        <input
-          type="password"
-          id="passwordInput"
-          placeholder="Ingrese contraseña"
-        >
+        <label for="passwordInput">CONTRASEÑA DE ACCESO</label>
+        <div class="input-wrapper">
+          <input
+            type="password"
+            id="passwordInput"
+            placeholder="••••••••••••"
+            autocomplete="new-password"
+            maxlength="50"
+          >
+        </div>
       </div>
 
       <!-- ROL -->
       <div class="input-group">
-        <label>Rol</label>
-        <select id="rolUsuario">
-          <option value="admin">admin</option>
-          <option value="lider">lider</option>
-          <option value="jefe">jefe</option>
-          <option value="auditor">auditor</option>
-          <option value="compras">compras</option>
-        </select>
+        <label for="rolUsuario">ROL ASIGNADO</label>
+        <div class="input-wrapper select-wrapper">
+          <select id="rolUsuario">
+            <option value="admin">Administrador (Root)</option>
+            <option value="lider">Líder Operativo</option>
+            <option value="jefe">Jefe de Área</option>
+            <option value="auditor" selected>Auditor de Calidad</option>
+            <option value="compras">Gestión Compras</option>
+          </select>
+        </div>
       </div>
-
     </div>
 
-    <!-- ==========================================
-         MATRIZ DE PERMISOS GRANULARES
-    =========================================== -->
-    <div class="permisos-container">
-      <h3 class="permisos-title">🔐 Permisos del Usuario</h3>
-
-      <!-- INVENTARIO -->
-      <div class="permiso-card">
-        <h4>📦 Inventario</h4>
-
-        <div class="permiso-item">
-          <span>Ver</span>
-          <label class="switch">
-            <input type="checkbox" id="inventarioVer">
-            <span class="slider"></span>
-          </label>
+    <!-- MATRIZ DE PERMISOS GRANULARES -->
+    <div class="permisos-wrapper">
+      <div class="permisos-header-row">
+        <div class="permisos-title-block">
+          <h4>Matriz de Permisos por Módulo</h4>
+          <span>Habilite o restrinja capacidades de ejecución sobre el sistema</span>
         </div>
-
-        <div class="permiso-item">
-          <span>Crear</span>
-          <label class="switch">
-            <input type="checkbox" id="inventarioCrear">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Editar</span>
-          <label class="switch">
-            <input type="checkbox" id="inventarioEditar">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Eliminar</span>
-          <label class="switch">
-            <input type="checkbox" id="inventarioEliminar">
-            <span class="slider"></span>
-          </label>
+        <div class="quick-actions">
+          <button type="button" class="btn-text-action" onclick="toggleAllPermisos(true)">Marcar Todos</button>
+          <span class="sep">•</span>
+          <button type="button" class="btn-text-action" onclick="toggleAllPermisos(false)">Limpiar</button>
         </div>
       </div>
 
-      <!-- RECEPCIÓN -->
-      <div class="permiso-card">
-        <h4>📥 Recepción</h4>
-
-        <div class="permiso-item">
-          <span>Ver</span>
-          <label class="switch">
-            <input type="checkbox" id="recepcionVer">
-            <span class="slider"></span>
-          </label>
+      <div class="permisos-grid">
+        
+        <!-- INVENTARIO -->
+        <div class="permiso-card">
+          <div class="permiso-card-head">
+            <span class="mod-icon">📦</span>
+            <h5>Inventario</h5>
+          </div>
+          <div class="permiso-actions">
+            <label class="permiso-row">
+              <span>Lectura (Ver)</span>
+              <input type="checkbox" id="inventarioVer" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Creación (Crear)</span>
+              <input type="checkbox" id="inventarioCrear" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Edición (Editar)</span>
+              <input type="checkbox" id="inventarioEditar" class="tech-switch">
+            </label>
+            <label class="permiso-row danger-action">
+              <span>Eliminación (Eliminar)</span>
+              <input type="checkbox" id="inventarioEliminar" class="tech-switch">
+            </label>
+          </div>
         </div>
 
-        <div class="permiso-item">
-          <span>Crear</span>
-          <label class="switch">
-            <input type="checkbox" id="recepcionCrear">
-            <span class="slider"></span>
-          </label>
+        <!-- RECEPCIÓN -->
+        <div class="permiso-card">
+          <div class="permiso-card-head">
+            <span class="mod-icon">📥</span>
+            <h5>Recepción</h5>
+          </div>
+          <div class="permiso-actions">
+            <label class="permiso-row">
+              <span>Lectura (Ver)</span>
+              <input type="checkbox" id="recepcionVer" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Creación (Crear)</span>
+              <input type="checkbox" id="recepcionCrear" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Edición (Editar)</span>
+              <input type="checkbox" id="recepcionEditar" class="tech-switch">
+            </label>
+            <label class="permiso-row danger-action">
+              <span>Eliminación (Eliminar)</span>
+              <input type="checkbox" id="recepcionEliminar" class="tech-switch">
+            </label>
+          </div>
         </div>
 
-        <div class="permiso-item">
-          <span>Editar</span>
-          <label class="switch">
-            <input type="checkbox" id="recepcionEditar">
-            <span class="slider"></span>
-          </label>
+        <!-- AUDITORÍAS -->
+        <div class="permiso-card">
+          <div class="permiso-card-head">
+            <span class="mod-icon">📋</span>
+            <h5>Auditorías</h5>
+          </div>
+          <div class="permiso-actions">
+            <label class="permiso-row">
+              <span>Lectura (Ver)</span>
+              <input type="checkbox" id="auditoriasVer" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Creación (Crear)</span>
+              <input type="checkbox" id="auditoriasCrear" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Edición (Editar)</span>
+              <input type="checkbox" id="auditoriasEditar" class="tech-switch">
+            </label>
+            <label class="permiso-row danger-action">
+              <span>Eliminación (Eliminar)</span>
+              <input type="checkbox" id="auditoriasEliminar" class="tech-switch">
+            </label>
+          </div>
         </div>
 
-        <div class="permiso-item">
-          <span>Eliminar</span>
-          <label class="switch">
-            <input type="checkbox" id="recepcionEliminar">
-            <span class="slider"></span>
-          </label>
+        <!-- USUARIOS -->
+        <div class="permiso-card">
+          <div class="permiso-card-head">
+            <span class="mod-icon">👥</span>
+            <h5>Usuarios</h5>
+          </div>
+          <div class="permiso-actions">
+            <label class="permiso-row">
+              <span>Lectura (Ver)</span>
+              <input type="checkbox" id="usuariosVer" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Creación (Crear)</span>
+              <input type="checkbox" id="usuariosCrear" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Edición (Editar)</span>
+              <input type="checkbox" id="usuariosEditar" class="tech-switch">
+            </label>
+            <label class="permiso-row danger-action">
+              <span>Eliminación (Eliminar)</span>
+              <input type="checkbox" id="usuariosEliminar" class="tech-switch">
+            </label>
+          </div>
         </div>
+
+        <!-- CONFIABILIDAD -->
+        <div class="permiso-card">
+          <div class="permiso-card-head">
+            <span class="mod-icon">📊</span>
+            <h5>Confiabilidad</h5>
+          </div>
+          <div class="permiso-actions">
+            <label class="permiso-row">
+              <span>Lectura (Ver)</span>
+              <input type="checkbox" id="confiabilidadVer" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Creación (Crear)</span>
+              <input type="checkbox" id="confiabilidadCrear" class="tech-switch">
+            </label>
+            <label class="permiso-row">
+              <span>Edición (Editar)</span>
+              <input type="checkbox" id="confiabilidadEditar" class="tech-switch">
+            </label>
+            <label class="permiso-row danger-action">
+              <span>Eliminación (Eliminar)</span>
+              <input type="checkbox" id="confiabilidadEliminar" class="tech-switch">
+            </label>
+          </div>
+        </div>
+
       </div>
-
-      <!-- AUDITORÍAS -->
-      <div class="permiso-card">
-        <h4>📋 Auditorías</h4>
-
-        <div class="permiso-item">
-          <span>Ver</span>
-          <label class="switch">
-            <input type="checkbox" id="auditoriasVer">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Crear</span>
-          <label class="switch">
-            <input type="checkbox" id="auditoriasCrear">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Editar</span>
-          <label class="switch">
-            <input type="checkbox" id="auditoriasEditar">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Eliminar</span>
-          <label class="switch">
-            <input type="checkbox" id="auditoriasEliminar">
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-
-      <!-- USUARIOS -->
-      <div class="permiso-card">
-        <h4>👥 Usuarios</h4>
-
-        <div class="permiso-item">
-          <span>Ver</span>
-          <label class="switch">
-            <input type="checkbox" id="usuariosVer">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Crear</span>
-          <label class="switch">
-            <input type="checkbox" id="usuariosCrear">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Editar</span>
-          <label class="switch">
-            <input type="checkbox" id="usuariosEditar">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Eliminar</span>
-          <label class="switch">
-            <input type="checkbox" id="usuariosEliminar">
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-
-      <!-- CONFIABILIDAD -->
-      <div class="permiso-card">
-        <h4>📊 Confiabilidad</h4>
-
-        <div class="permiso-item">
-          <span>Ver</span>
-          <label class="switch">
-            <input type="checkbox" id="confiabilidadVer">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Crear</span>
-          <label class="switch">
-            <input type="checkbox" id="confiabilidadCrear">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Editar</span>
-          <label class="switch">
-            <input type="checkbox" id="confiabilidadEditar">
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="permiso-item">
-          <span>Eliminar</span>
-          <label class="switch">
-            <input type="checkbox" id="confiabilidadEliminar">
-            <span class="slider"></span>
-          </label>
-        </div>
-      </div>
-
     </div>
 
-    <!-- BOTON GUARDAR -->
+    <!-- BOTONES DE ACCIÓN -->
     <div class="button-group">
-      <button
-        id="guardarUsuario"
-        class="btn-primary"
-      >
-        Guardar Usuario
+      <button id="guardarUsuario" class="btn-tech-primary">
+        <span>PROCESAR & GUARDAR USUARIO</span>
+        <div class="btn-glow"></div>
+      </button>
+      <button type="button" class="btn-tech-secondary" onclick="limpiarFormulario()">
+        RESTAURAR CAMPOS
       </button>
     </div>
-  </div>
+  </section>
 
-  <!-- ==========================================
-       TABLA DE USUARIOS REGISTRADOS
-  =========================================== -->
-  <div class="module-card">
-    <div class="table-header">
-      <h3>Usuarios Registrados</h3>
-      <input
-        type="text"
-        id="buscarUsuario"
-        placeholder="Buscar usuario..."
-        class="search-input"
-      >
+  <!-- LISTADO DE USUARIOS REGISTRADOS -->
+  <section class="module-card">
+    <div class="table-header-custom">
+      <div>
+        <h3>Directorio de Cuentas</h3>
+        <p class="table-sub">Registros almacenados con políticas RLS activas</p>
+      </div>
+      <div class="search-box">
+        <span class="search-icon">🔍</span>
+        <input
+          type="text"
+          id="buscarUsuario"
+          placeholder="Buscar por usuario o rol..."
+          class="search-input"
+          autocomplete="off"
+        >
+      </div>
     </div>
 
     <div class="table-container">
-      <table>
+      <table class="tech-table">
         <thead>
           <tr>
-            <th style="width:25%;">Usuario</th>
-            <th style="width:20%;">Rol</th>
-            <th style="width:20%;">Estado</th>
-            <th style="width:35%;">Acciones</th>
+            <th>USUARIO / IDENTIDAD</th>
+            <th>NIVEL DE PRIVILEGIO</th>
+            <th>ESTADO CUENTA</th>
+            <th class="text-right">ACCIONES</th>
           </tr>
         </thead>
-        <tbody id="usuariosBody"></tbody>
+        <tbody id="usuariosBody">
+          <!-- Renderizado dinámico vía JS -->
+        </tbody>
       </table>
     </div>
-  </div>
+  </section>
 
 </div>
