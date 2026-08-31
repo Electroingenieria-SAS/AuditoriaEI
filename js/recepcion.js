@@ -466,10 +466,13 @@ document.addEventListener("input", function (e) {
   }
 });
 
-// 10. MODAL GESTIÓN COMPRAS
+// ==========================================================
+// MODAL GESTIÓN COMPRAS (PARSER ULTRA PREMIUM)
+// ==========================================================
 window.validarRecepcion = async function (id) {
   try {
     window.recepcionGestionando = Number(id);
+
     const { data: rec, error } = await window.supabaseClient
       .from("recepciones")
       .select("*")
@@ -477,7 +480,7 @@ window.validarRecepcion = async function (id) {
       .single();
 
     if (error || !rec) {
-      notificar("No se pudo cargar la recepción.");
+      notificar("No se pudo consultar el registro de recepción.");
       return;
     }
 
@@ -485,22 +488,73 @@ window.validarRecepcion = async function (id) {
     asignarValor("gestionComentarioInput", "");
 
     const timeline = obtenerElemento("timelineSeguimiento");
+    const countBadge = obtenerElemento("timelineCountBadge");
+
     if (timeline) {
-      if (!rec.seguimiento || rec.seguimiento.trim() === "") {
-        timeline.innerHTML = `<div style="text-align:center;color:#94A3B8;padding:20px;">Sin historial de seguimiento</div>`;
+      const textoSeguimiento = (rec.seguimiento || "").trim();
+
+      if (!textoSeguimiento) {
+        timeline.innerHTML = `
+          <div class="timeline-empty-state">
+            <div class="timeline-empty-icon">📋</div>
+            <h5>Sin intervenciones previas</h5>
+            <p>Registre el primer seguimiento con el proveedor en el panel lateral.</p>
+          </div>`;
+        if (countBadge) countBadge.innerText = "0 Registros";
       } else {
-        const bloques = rec.seguimiento.split("━━━━━━━━━━━━━━━━━━").reverse();
-        timeline.innerHTML = bloques.filter(b => b.trim()).map(b => `
-          <div class="timeline-item">
-            ${b.replace(/\n/g, "<br>")}
-          </div>
-        `).join("");
+        const bloques = textoSeguimiento.split("━━━━━━━━━━━━━━━━━━").reverse().filter(b => b.trim());
+
+        if (countBadge) countBadge.innerText = `${bloques.length} ${bloques.length === 1 ? 'Registro' : 'Registros'}`;
+
+        timeline.innerHTML = bloques.map(bloque => {
+          // Extraer fecha, usuario, estado y comentario usando expresiones regulares
+          const matchFecha = bloque.match(/📅\s*([^\n]+)/);
+          const matchUsuario = bloque.match(/👤\s*(?:Usuario:\s*)?([^\n]+)/i);
+          const matchEstado = bloque.match(/🏷️\s*(?:Estado:\s*)?([^\n]+)/i);
+          
+          let comentario = bloque
+            .replace(/📅[^\n]*/g, "")
+            .replace(/👤[^\n]*/g, "")
+            .replace(/🏷️[^\n]*/g, "")
+            .replace(/📝\s*(?:Comentario:\s*)?/gi, "")
+            .trim();
+
+          const fecha = matchFecha ? matchFecha[1].trim() : "Fecha no registrada";
+          const usuario = matchUsuario ? matchUsuario[1].trim() : "Compras";
+          const estado = matchEstado ? matchEstado[1].trim() : "Seguimiento";
+          const inicial = usuario.charAt(0).toUpperCase();
+
+          let badgeClass = "badge-status-default";
+          const estadoLower = estado.toLowerCase();
+          if (estadoLower.includes("pendiente")) badgeClass = "badge-status-pendiente";
+          else if (estadoLower.includes("gestión") || estadoLower.includes("gestion")) badgeClass = "badge-status-gestion";
+          else if (estadoLower.includes("proveedor") || estadoLower.includes("contacto")) badgeClass = "badge-status-proveedor";
+          else if (estadoLower.includes("solucion")) badgeClass = "badge-status-solucionado";
+          else if (estadoLower.includes("cerrad")) badgeClass = "badge-status-cerrado";
+
+          return `
+            <div class="timeline-card-item">
+              <div class="timeline-item-header">
+                <div class="timeline-user-tag">
+                  <div class="user-tag-avatar">${inicial}</div>
+                  <span>${escaparHTML(usuario)}</span>
+                </div>
+                <span class="timeline-date-chip">📅 ${escaparHTML(fecha)}</span>
+              </div>
+              <div>
+                <span class="timeline-badge-status ${badgeClass}">● ${escaparHTML(estado)}</span>
+              </div>
+              <div class="timeline-comment-box">
+                ${escaparHTML(comentario).replace(/\n/g, "<br>")}
+              </div>
+            </div>`;
+        }).join("");
       }
     }
 
     window.abrirModal("modalGestion");
   } catch (err) {
-    console.error(err);
+    console.error("Error al abrir gestión de compras:", err);
   }
 };
 
