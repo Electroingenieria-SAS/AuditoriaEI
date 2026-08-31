@@ -1,8 +1,8 @@
 // ==========================================================
-// AUDITORIAS.JS — Versión Robusta, Segura y Optimizada
+// AUDITORIAS.JS — Módulo Integral de Auditorías (SPA Compliant)
 // ==========================================================
 
-// 1. LIMPIEZA / BOOTSTRAP
+// 1. LIMPIEZA / BOOTSTRAP DE MEMORIA
 if (window.refreshAuditoriasInterval) {
     clearInterval(window.refreshAuditoriasInterval);
 }
@@ -20,7 +20,8 @@ if (window.refreshAuditoriasInterval) {
     "filtrarAuditorias",
     "eliminarDocumentoTemporal",
     "eliminarDocumentoEdicionTemporal",
-    "eliminarDocumentoAuditoria"
+    "eliminarDocumentoAuditoria",
+    "cerrarCualquierModal"
 ].forEach(nombre => delete window[nombre]);
 
 // 2. ESTADO INTERNO DEL MÓDULO
@@ -37,7 +38,7 @@ let auditoriaDocumentosModalId = null;
 let auditoriaEnEdicion = null;
 window.documentosAuditoriaModalCache = {};
 
-// 3. UTILIDADES GENÉRICAS
+// 3. UTILIDADES Y SANITIZACIÓN
 function obtenerElemento(id) {
     return document.getElementById(id);
 }
@@ -52,7 +53,6 @@ function asignarValor(id, valor) {
     if (el) el.value = valor ?? "";
 }
 
-// Sanitización XSS
 function escaparHTML(str) {
     return String(str || "")
         .replace(/&/g, "&amp;")
@@ -110,37 +110,36 @@ function claseEstado(estado) {
     }
 }
 
-function abrirModal(id) {
-    const modal = obtenerElemento(id);
-    if (modal) modal.classList.add("active");
-}
-
-function cerrarModal(id) {
-    const modal = obtenerElemento(id);
-    if (modal) modal.classList.remove("active");
-}
-
-function configurarCierreModal(modalId, botonCerrarId) {
-    const modal = obtenerElemento(modalId);
-    const boton = obtenerElemento(botonCerrarId);
-
-    if (boton) {
-        boton.onclick = () => cerrarModal(modalId);
-    }
-
-    if (modal) {
-        modal.onclick = function (e) {
-            if (e.target === modal) cerrarModal(modalId);
-        };
-    }
-}
-
 function manejarErrorSupabase(error, mensajeUsuario) {
     console.error(error);
-    notificar("Error de Operación", mensajeUsuario || error?.message || "Error inesperado", "error");
+    notificar("Error", mensajeUsuario || error?.message || "Ocurrió un error inesperado", "error");
 }
 
-// 4. HISTORIAL Y AUDITORÍA
+// 4. CONTROL Y CIERRE UNIVERSAL DE MODALES
+window.abrirModal = function (id) {
+    const modal = obtenerElemento(id);
+    if (modal) {
+        modal.classList.add("active");
+        modal.style.display = "flex";
+    }
+};
+
+window.cerrarModal = function (id) {
+    const modal = obtenerElemento(id);
+    if (modal) {
+        modal.classList.remove("active");
+        modal.style.display = "none";
+    }
+};
+
+window.cerrarCualquierModal = function () {
+    document.querySelectorAll(".modal.active, .modal-auditoria.active, [id^='modal'].active").forEach(m => {
+        m.classList.remove("active");
+        m.style.display = "none";
+    });
+};
+
+// 5. HISTORIAL DE ACCIONES
 async function registrarEvento(accion, descripcion, opciones = {}) {
     try {
         if (typeof window.guardarHistorial === "function") {
@@ -153,7 +152,7 @@ async function registrarEvento(accion, descripcion, opciones = {}) {
             notificar(opciones.popup.titulo || "Auditorías", descripcion, opciones.popup.tipo || "success");
         }
     } catch (error) {
-        console.error("Fallo registrando historial:", error);
+        console.error("Error registrando historial:", error);
     }
 }
 
@@ -185,20 +184,20 @@ function generarCambios(anterior, nuevo, huboDocumentoNuevo) {
     return cambios;
 }
 
-// 5. DOCUMENTOS Y GESTIÓN TEMPORAL
+// 6. GESTIÓN DE ARCHIVOS TEMPORALES
 function agregarArchivosALista(archivos, destino, renderCallback) {
     const maxAdjuntos = ADJUNTOS_AUDITORIA?.MAX_ADJUNTOS || 10;
 
     for (const archivo of Array.from(archivos || [])) {
         if (destino.length >= maxAdjuntos) {
-            notificar("Límite de soportes", `Solo puede adjuntar hasta ${maxAdjuntos} soportes.`);
+            notificar("Límite de soportes", `Solo puede seleccionar hasta ${maxAdjuntos} soportes.`);
             break;
         }
 
         if (ADJUNTOS_AUDITORIA) {
             const validacion = ADJUNTOS_AUDITORIA.validarArchivo(archivo);
             if (!validacion.valido) {
-                notificar("Archivo inválido", validacion.mensaje);
+                notificar("Archivo no válido", validacion.mensaje);
                 continue;
             }
         }
@@ -226,18 +225,18 @@ function agregarDriveALista(input, destino, renderCallback) {
     if (!input) return;
     const maxAdjuntos = ADJUNTOS_AUDITORIA?.MAX_ADJUNTOS || 10;
     if (destino.length >= maxAdjuntos) {
-        notificar("Límite de soportes", `Solo puede adjuntar hasta ${maxAdjuntos} soportes.`);
+        notificar("Límite de soportes", `Solo puede seleccionar hasta ${maxAdjuntos} soportes.`);
         return;
     }
 
     const url = ADJUNTOS_AUDITORIA ? ADJUNTOS_AUDITORIA.normalizarDriveUrl(input.value) : input.value.trim();
     if (!url || !url.startsWith("https://")) {
-        notificar("Enlace inválido", "Pegue un enlace válido de Google Drive/Docs que empiece por https://");
+        notificar("Enlace inválido", "Pegue un enlace válido de Google Drive o Docs (https://).");
         return;
     }
 
     if (destino.some(i => i.url === url)) {
-        notificar("Duplicado", "El enlace ya está en la lista.");
+        notificar("Duplicado", "Ese enlace ya fue agregado.");
         return;
     }
 
@@ -257,7 +256,7 @@ function htmlSoporteTemporal(soporte, index, funcionEliminar) {
     const visual = ADJUNTOS_AUDITORIA ? ADJUNTOS_AUDITORIA.tipoVisual(soporte) : { icono: "📄", etiqueta: "Archivo" };
     const meta = soporte.tipo === "drive"
         ? "Google Drive"
-        : `${visual.etiqueta} · ${ADJUNTOS_AUDITORIA ? ADJUNTOS_AUDITORIA.formatearTamano(soporte.tamano) : (soporte.tamano + ' bytes')}`;
+        : `${visual.etiqueta} · ${ADJUNTOS_AUDITORIA ? ADJUNTOS_AUDITORIA.formatearTamano(soporte.tamano) : (soporte.tamano + ' B')}`;
 
     return `
         <div class="adjunto-item">
@@ -317,14 +316,12 @@ function limpiarDocumentos() {
 
 function limpiarDocumentosEdicion() {
     documentosEdicionSeleccionados = [];
-    const inputArchivo = obtenerElemento("editarDocumento");
     const inputDrive = obtenerElemento("driveLinkEdicionAuditoria");
-    if (inputArchivo) inputArchivo.value = "";
     if (inputDrive) inputDrive.value = "";
     renderDocumentosEdicion();
 }
 
-// 6. STORAGE Y SUBIDAS PARALELAS
+// 7. STORAGE Y SUBIDAS A SUPABASE
 function generarRutaStorage(auditoriaId, nombreArchivo) {
     const limpio = String(nombreArchivo || "soporte")
         .normalize("NFD")
@@ -388,10 +385,9 @@ async function agregarSoportesDirectos(auditoriaId, soportes) {
 
     const maxAdjuntos = ADJUNTOS_AUDITORIA?.MAX_ADJUNTOS || 10;
     if ((count || 0) + soportes.length > maxAdjuntos) {
-        return { error: new Error(`La auditoría excede el límite máximo de ${maxAdjuntos} soportes.`) };
+        return { error: new Error(`La auditoría excede el máximo permitido de ${maxAdjuntos} soportes.`) };
     }
 
-    // Subida en paralelo para máxima velocidad
     const promesas = soportes.map(soporte => subirDocumentoIndividual(auditoriaId, soporte));
     const resultados = await Promise.all(promesas);
 
@@ -428,7 +424,7 @@ async function eliminarDocumentos(documentos) {
     await window.supabaseClient.from(DOCUMENTOS_TABLA).delete().in("id", ids);
 }
 
-// 7. CRUD PRINCIPAL (Creación y Renderizado)
+// 8. CRUD AUDITORÍAS (CREACIÓN, LISTADO Y FILTRO)
 async function guardarAuditoria() {
     const btnGuardar = obtenerElemento("guardarAuditoria");
 
@@ -453,13 +449,12 @@ async function guardarAuditoria() {
 
         const minAdjuntos = ADJUNTOS_AUDITORIA?.MIN_ADJUNTOS || 1;
         if (documentosSeleccionados.length < minAdjuntos) {
-            notificar("Soportes requeridos", `Debe agregar mínimo ${minAdjuntos} soporte para crear la auditoría.`);
+            notificar("Soportes obligatorios", `Debe agregar al menos ${minAdjuntos} soporte para registrar la auditoría.`);
             return;
         }
 
         if (btnGuardar) btnGuardar.disabled = true;
 
-        // 1. Insertar auditoría
         const { data, error } = await window.supabaseClient
             .from(AUDITORIAS_TABLA)
             .insert([{ tipo, nombre, proceso, responsable, estado, fecha, observaciones }])
@@ -471,7 +466,6 @@ async function guardarAuditoria() {
             return;
         }
 
-        // 2. Subir soportes
         const resSoportes = await agregarSoportesDirectos(data.id, documentosSeleccionados);
         if (resSoportes.error) {
             await window.supabaseClient.from(AUDITORIAS_TABLA).delete().eq("id", data.id);
@@ -480,13 +474,13 @@ async function guardarAuditoria() {
         }
 
         await registrarEvento("CREAR", `Nueva auditoría registrada: ${nombre}.`, {
-            popup: { titulo: "Auditoría Creada", tipo: "success" }
+            popup: { titulo: "Auditoría creada", tipo: "success" }
         });
 
         limpiarFormulario();
         await window.cargarAuditorias();
     } catch (error) {
-        manejarErrorSupabase(error, "Ocurrió un error general.");
+        manejarErrorSupabase(error, "Error al procesar la auditoría.");
     } finally {
         if (btnGuardar) btnGuardar.disabled = false;
     }
@@ -517,7 +511,6 @@ window.cargarAuditorias = async function () {
 
         auditoriasCache = data || [];
 
-        // No sobreescribir la tabla si el usuario está realizando una búsqueda
         const buscarInput = obtenerElemento("buscarAuditoria");
         if (buscarInput && buscarInput.value.trim() !== "") {
             window.filtrarAuditorias();
@@ -550,10 +543,10 @@ window.renderAuditorias = function (lista = auditoriasCache) {
             <td>${formatearFecha(item.fecha)}</td>
             <td>
                 <div class="acciones-tabla">
-                    <button class="btn-ver" title="Ver detalle" onclick="verDetalleAuditoria(${item.id})">👁️</button>
-                    <button class="btn-primary" title="Documentos" onclick="verDocumentos(${item.id})">📁</button>
-                    ${puedeEditar ? `<button class="btn-editar" title="Editar" onclick="abrirEditarAuditoria(${item.id})">✏️</button>` : ""}
-                    ${puedeEliminar ? `<button class="btn-eliminar" title="Eliminar" onclick="eliminarAuditoria(${item.id})">🗑️</button>` : ""}
+                    <button type="button" class="btn-ver" title="Ver detalle" onclick="verDetalleAuditoria(${item.id})">👁️</button>
+                    <button type="button" class="btn-primary" title="Documentos" onclick="verDocumentos(${item.id})">📁</button>
+                    ${puedeEditar ? `<button type="button" class="btn-editar" title="Editar" onclick="abrirEditarAuditoria(${item.id})">✏️</button>` : ""}
+                    ${puedeEliminar ? `<button type="button" class="btn-eliminar" title="Eliminar" onclick="eliminarAuditoria(${item.id})">🗑️</button>` : ""}
                 </div>
             </td>
         </tr>
@@ -578,7 +571,7 @@ window.filtrarAuditorias = function () {
     window.renderAuditorias(resultado);
 };
 
-// 8. MODAL VER DOCUMENTOS
+// 9. MODAL "VER DOCUMENTOS"
 window.verDocumentos = async function (id) {
     try {
         const lista = obtenerElemento("listaDocumentosModal");
@@ -590,7 +583,7 @@ window.verDocumentos = async function (id) {
 
         const { data, error } = await obtenerDocumentosDeAuditoria(id);
         if (error) {
-            manejarErrorSupabase(error, "Error al consultar los soportes.");
+            manejarErrorSupabase(error, "Error consultando los soportes.");
             return;
         }
 
@@ -633,9 +626,9 @@ window.verDocumentos = async function (id) {
             }).join("");
         }
 
-        abrirModal("modalDocumentos");
+        window.abrirModal("modalDocumentos");
     } catch (error) {
-        manejarErrorSupabase(error, "Error consultando soportes.");
+        manejarErrorSupabase(error, "Error al abrir ventana de soportes.");
     }
 };
 
@@ -701,7 +694,7 @@ window.eliminarDocumentoAuditoria = async function (documentoId, auditoriaId) {
     }
 };
 
-// 9. EDICIÓN INTEGRAL DE AUDITORÍAS
+// 10. MODAL "EDITAR AUDITORÍA"
 window.abrirEditarAuditoria = async function (id) {
     try {
         const { data, error } = await window.supabaseClient
@@ -727,7 +720,7 @@ window.abrirEditarAuditoria = async function (id) {
         asignarValor("editarObservaciones", data.observaciones || "");
 
         limpiarDocumentosEdicion();
-        abrirModal("modalEditarAuditoria");
+        window.abrirModal("modalEditarAuditoria");
     } catch (error) {
         console.error(error);
     }
@@ -767,7 +760,7 @@ async function guardarCambiosAuditoria() {
             return;
         }
 
-        // 2. Subir soportes si se agregaron nuevos
+        // 2. Subir nuevos soportes
         if (documentosEdicionSeleccionados.length > 0) {
             const resSoportes = await agregarSoportesDirectos(id, documentosEdicionSeleccionados);
             if (resSoportes.error) {
@@ -786,18 +779,18 @@ async function guardarCambiosAuditoria() {
 
         notificar("Actualización Exitosa", "Auditoría modificada correctamente.", "success");
 
-        cerrarModal("modalEditarAuditoria");
+        window.cerrarModal("modalEditarAuditoria");
         limpiarDocumentosEdicion();
         auditoriaEnEdicion = null;
         await window.cargarAuditorias();
     } catch (error) {
-        manejarErrorSupabase(error, "Error editando auditoría.");
+        manejarErrorSupabase(error, "Error editando la auditoría.");
     } finally {
         if (btnGuardar) btnGuardar.disabled = false;
     }
 }
 
-// 10. DETALLE DE AUDITORÍA
+// 11. MODAL "DETALLE DE AUDITORÍA"
 window.verDetalleAuditoria = async function (id) {
     try {
         const { data, error } = await window.supabaseClient
@@ -830,13 +823,13 @@ window.verDetalleAuditoria = async function (id) {
             estadoEl.classList.add(claseEstado(data.estado));
         }
 
-        abrirModal("modalDetalleAuditoria");
+        window.abrirModal("modalDetalleAuditoria");
     } catch (error) {
         manejarErrorSupabase(error, "Error consultando detalle.");
     }
 };
 
-// 11. ELIMINACIÓN Y CAMBIO RÁPIDO DE ESTADO
+// 12. ELIMINACIÓN Y CAMBIO RÁPIDO DE ESTADO
 window.eliminarAuditoria = async function (id) {
     try {
         if (!window.tienePermiso?.("auditorias", "eliminar")) {
@@ -906,7 +899,127 @@ window.editarEstado = async function (id) {
     }
 };
 
-// 12. INICIALIZADOR Y EVENT LISTENERS (Centralizados)
+// 13. DELEGACIÓN GLOBAL DE EVENTOS (Blindaje de Clicks y Modales)
+document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") window.cerrarCualquierModal();
+});
+
+document.addEventListener("click", function (e) {
+    // A) Cierre de modales (Cualquier 'X' o botón de cerrar)
+    const btnCerrar = e.target.closest("#cerrarEditarAuditoria, #cerrarModalDocumentos, #cerrarDetalleAuditoria, .modal-close, .btn-close, .close-modal, [data-close-modal]");
+    if (btnCerrar) {
+        e.preventDefault();
+        const modalPadre = btnCerrar.closest(".modal, .modal-auditoria, [id^='modal']");
+        if (modalPadre) {
+            modalPadre.classList.remove("active");
+            modalPadre.style.display = "none";
+        } else {
+            window.cerrarCualquierModal();
+        }
+        return;
+    }
+
+    // B) Cierre al hacer clic en el backdrop oscuro
+    if (e.target.classList.contains("modal") || e.target.classList.contains("modal-auditoria")) {
+        e.target.classList.remove("active");
+        e.target.style.display = "none";
+        return;
+    }
+
+    // C) Botón "Seleccionar archivos" en Creación
+    const btnDocCrear = e.target.closest("#btnAgregarDocumento, .btn-agregar-soporte");
+    if (btnDocCrear) {
+        e.preventDefault();
+        let input = obtenerElemento("documentoInput") || obtenerElemento("soporteInput");
+        if (!input) {
+            input = document.createElement("input");
+            input.type = "file";
+            input.id = "documentoInput";
+            input.multiple = true;
+            input.style.display = "none";
+            document.body.appendChild(input);
+        }
+        input.onchange = function (evento) {
+            agregarArchivosALista(evento.target.files, documentosSeleccionados, renderDocumentos);
+            evento.target.value = "";
+        };
+        input.click();
+        return;
+    }
+
+    // D) Botón "Seleccionar archivos" en Edición
+    const btnDocEditar = e.target.closest("#btnAgregarDocumentoEdicion, .btn-agregar-soporte-edicion");
+    if (btnDocEditar) {
+        e.preventDefault();
+        let input = obtenerElemento("editarDocumento") || obtenerElemento("editarDocumentoInput") || obtenerElemento("documentoEdicionInput");
+        if (!input) {
+            input = document.createElement("input");
+            input.type = "file";
+            input.id = "editarDocumento";
+            input.multiple = true;
+            input.style.display = "none";
+            document.body.appendChild(input);
+        }
+        input.onchange = function (evento) {
+            agregarArchivosALista(evento.target.files, documentosEdicionSeleccionados, renderDocumentosEdicion);
+            evento.target.value = "";
+        };
+        input.click();
+        return;
+    }
+
+    // E) Botón "Agregar enlace" (Drive) en Creación
+    if (e.target.closest("#btnAgregarDriveAuditoria")) {
+        e.preventDefault();
+        const driveInput = obtenerElemento("driveLinkAuditoria");
+        agregarDriveALista(driveInput, documentosSeleccionados, renderDocumentos);
+        return;
+    }
+
+    // F) Botón "Agregar enlace" (Drive) en Edición
+    if (e.target.closest("#btnAgregarDriveEdicion")) {
+        e.preventDefault();
+        const driveInput = obtenerElemento("driveLinkEdicionAuditoria");
+        agregarDriveALista(driveInput, documentosEdicionSeleccionados, renderDocumentosEdicion);
+        return;
+    }
+
+    // G) Botón "Guardar Auditoría" (Creación)
+    if (e.target.closest("#guardarAuditoria")) {
+        e.preventDefault();
+        guardarAuditoria();
+        return;
+    }
+
+    // H) Botón "Guardar Cambios" (Edición)
+    if (e.target.closest("#guardarEdicionAuditoria")) {
+        e.preventDefault();
+        guardarCambiosAuditoria();
+        return;
+    }
+});
+
+// Soporte para presionar "Enter" en los inputs de Google Drive
+document.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+        if (e.target && e.target.id === "driveLinkAuditoria") {
+            e.preventDefault();
+            agregarDriveALista(e.target, documentosSeleccionados, renderDocumentos);
+        } else if (e.target && e.target.id === "driveLinkEdicionAuditoria") {
+            e.preventDefault();
+            agregarDriveALista(e.target, documentosEdicionSeleccionados, renderDocumentosEdicion);
+        }
+    }
+});
+
+// Buscador reactivo global
+document.addEventListener("input", function (e) {
+    if (e.target && e.target.id === "buscarAuditoria") {
+        window.filtrarAuditorias();
+    }
+});
+
+// 14. INICIALIZADOR
 window.iniciarRefreshAuditorias = function () {
     if (window.refreshAuditoriasInterval) clearInterval(window.refreshAuditoriasInterval);
     window.refreshAuditoriasInterval = setInterval(() => {
@@ -916,49 +1029,7 @@ window.iniciarRefreshAuditorias = function () {
     }, 6000);
 };
 
-(function init() {
-    // Configurar modales
-    configurarCierreModal("modalDocumentos", "cerrarModalDocumentos");
-    configurarCierreModal("modalEditarAuditoria", "cerrarEditarAuditoria");
-    configurarCierreModal("modalDetalleAuditoria", "cerrarDetalleAuditoria");
-
-    // Asignar listeners de creación
-    const btnGuardar = obtenerElemento("guardarAuditoria");
-    if (btnGuardar) btnGuardar.onclick = guardarAuditoria;
-
-    const btnDoc = obtenerElemento("btnAgregarDocumento");
-    const docInput = obtenerElemento("documentoInput");
-    if (btnDoc && docInput) {
-        btnDoc.onclick = () => docInput.click();
-        docInput.onchange = (e) => {
-            agregarArchivosALista(e.target.files, documentosSeleccionados, renderDocumentos);
-            e.target.value = "";
-        };
-    }
-
-    const btnDrive = obtenerElemento("btnAgregarDriveAuditoria");
-    const driveInput = obtenerElemento("driveLinkAuditoria");
-    if (btnDrive && driveInput) {
-        btnDrive.onclick = () => agregarDriveALista(driveInput, documentosSeleccionados, renderDocumentos);
-        driveInput.onkeydown = (e) => {
-            if (e.key === "Enter") {
-                e.preventDefault();
-                agregarDriveALista(driveInput, documentosSeleccionados, renderDocumentos);
-            }
-        };
-    }
-
-    // Listeners de edición
-    const btnGuardarEdit = obtenerElemento("guardarEdicionAuditoria");
-    if (btnGuardarEdit) btnGuardarEdit.onclick = guardarCambiosAuditoria;
-
-    // Buscador
-    const buscarAuditoria = obtenerElemento("buscarAuditoria");
-    if (buscarAuditoria) {
-        buscarAuditoria.oninput = window.filtrarAuditorias;
-    }
-
-    // Estado inicial
+(function inicializarModulo() {
     const fechaInput = obtenerElemento("fechaInput");
     if (fechaInput && !fechaInput.value) {
         fechaInput.value = obtenerFechaLocal();
