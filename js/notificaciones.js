@@ -1,10 +1,9 @@
 // =====================================================
-// SISTEMA DE NOTIFICACIONES PREMIUM - GLOBAL (CON SONIDO)
+// SISTEMA DE NOTIFICACIONES PREMIUM - AISLADO POR USUARIO
 // =====================================================
 
 (function(){
 
-  const STORAGE_KEY = 'notificaciones';
   const MAX_HISTORIAL = 50;
 
   const ICONOS = {
@@ -23,9 +22,25 @@
 
   const DURACION_MS = 4200;
 
-  // ===================================================
-  // 1. MOTOR DE AUDIO NATIVO (WEB AUDIO API)
-  // ===================================================
+  // 1. OBTENER IDENTIFICADOR ÚNICO DEL USUARIO ACTUAL
+  function obtenerClaveUsuario() {
+    let usuarioActual = 'invitado';
+    try {
+      if (window.usuarioLogueado && window.usuarioLogueado.usuario) {
+        usuarioActual = String(window.usuarioLogueado.usuario).toLowerCase().trim();
+      } else {
+        const sesion = JSON.parse(localStorage.getItem('usuarioLogueado') || '{}');
+        if (sesion.usuario) {
+          usuarioActual = String(sesion.usuario).toLowerCase().trim();
+        }
+      }
+    } catch {
+      usuarioActual = 'invitado';
+    }
+    return `notificaciones_${usuarioActual}`;
+  }
+
+  // 2. MOTOR DE AUDIO NATIVO
   let audioCtx = null;
 
   function reproducirSonidoNotificacion(tipo = 'info') {
@@ -33,39 +48,31 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
 
-      if (!audioCtx) {
-        audioCtx = new AudioContext();
-      }
-
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
 
       const ahora = audioCtx.currentTime;
-
-      // Configuraciones armónicas según el tipo de alerta
       const configSonido = {
         success: [
-          { f: 523.25, d: 0.08, t: 0 },     // C5
-          { f: 659.25, d: 0.12, t: 0.08 },  // E5
-          { f: 1046.50, d: 0.25, t: 0.18 }  // C6 (Tono brillante de éxito)
+          { f: 523.25, d: 0.08, t: 0 },
+          { f: 659.25, d: 0.12, t: 0.08 },
+          { f: 1046.50, d: 0.25, t: 0.18 }
         ],
         warning: [
-          { f: 440.00, d: 0.12, t: 0 },     // A4
-          { f: 554.37, d: 0.20, t: 0.10 }   // C#5
+          { f: 440.00, d: 0.12, t: 0 },
+          { f: 554.37, d: 0.20, t: 0.10 }
         ],
         error: [
-          { f: 311.13, d: 0.15, t: 0 },     // Eb4
-          { f: 233.08, d: 0.28, t: 0.12 }   // Bb3 (Tono grave de advertencia)
+          { f: 311.13, d: 0.15, t: 0 },
+          { f: 233.08, d: 0.28, t: 0.12 }
         ],
         info: [
-          { f: 587.33, d: 0.09, t: 0 },     // D5
-          { f: 880.00, d: 0.18, t: 0.08 }   // A5 (Campana moderna)
+          { f: 587.33, d: 0.09, t: 0 },
+          { f: 880.00, d: 0.18, t: 0.08 }
         ]
       };
 
       const notas = configSonido[tipo] || configSonido.info;
-
       notas.forEach(nota => {
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
@@ -73,7 +80,6 @@
         osc.type = tipo === 'error' ? 'sawtooth' : 'sine';
         osc.frequency.setValueAtTime(nota.f, ahora + nota.t);
 
-        // Curva de volumen suave (Fade In / Fade Out)
         gain.gain.setValueAtTime(0.001, ahora + nota.t);
         gain.gain.exponentialRampToValueAtTime(0.18, ahora + nota.t + 0.02);
         gain.gain.exponentialRampToValueAtTime(0.0001, ahora + nota.t + nota.d);
@@ -84,15 +90,12 @@
         osc.start(ahora + nota.t);
         osc.stop(ahora + nota.t + nota.d);
       });
-
     } catch (e) {
-      console.warn('El navegador restringió la reproducción de audio automática:', e);
+      console.warn('Audio no disponible:', e);
     }
   }
 
-  // ===================================================
-  // 2. INYECTAR CONTENEDORES SI NO EXISTEN
-  // ===================================================
+  // 3. INYECTAR CONTENEDORES
   function asegurarContenedores(){
     if(!document.getElementById('notifStack')){
       const stack = document.createElement('div');
@@ -103,7 +106,6 @@
     if(!document.getElementById('notifModalOverlay')){
       const overlay = document.createElement('div');
       overlay.id = 'notifModalOverlay';
-
       overlay.innerHTML =
         '<div class="notif-modal-box" id="notifModalBox">' +
           '<div class="notif-modal-icono" id="notifModalIcono">❓</div>' +
@@ -115,28 +117,15 @@
             '<button class="notif-btn-aceptar" id="notifBtnAceptar" type="button">Aceptar</button>' +
           '</div>' +
         '</div>';
-
       document.body.appendChild(overlay);
-    }
-
-    if(!document.getElementById('notifPremiumCSS')){
-      const link = document.createElement('link');
-      link.id = 'notifPremiumCSS';
-      link.rel = 'stylesheet';
-
-      const enSubcarpeta = window.location.pathname.includes('/modules/');
-      link.href = (enSubcarpeta ? '../css/' : 'css/') + 'notificaciones-premium.css';
-
-      document.head.appendChild(link);
     }
   }
 
-  // ===================================================
-  // 3. PERSISTENCIA EN LOCALSTORAGE & CAMPANA ERP
-  // ===================================================
+  // 4. PERSISTENCIA INDEPENDIENTE POR USUARIO
   function obtenerHistorial(){
     try {
-      return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      const key = obtenerClaveUsuario();
+      return JSON.parse(localStorage.getItem(key)) || [];
     } catch {
       return [];
     }
@@ -144,9 +133,10 @@
 
   function guardarHistorial(lista){
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(lista.slice(0, MAX_HISTORIAL)));
+      const key = obtenerClaveUsuario();
+      localStorage.setItem(key, JSON.stringify(lista.slice(0, MAX_HISTORIAL)));
     } catch(e) {
-      console.warn('No se pudo guardar el historial de notificaciones:', e);
+      console.warn('No se pudo guardar el historial:', e);
     }
   }
 
@@ -161,13 +151,9 @@
     contador.style.display = noLeidas > 0 ? 'inline-flex' : 'none';
   };
 
-  // ===================================================
-  // 4. TOAST VISUAL + AUDIO
-  // ===================================================
+  // 5. TOAST VISUAL
   function toast(tipo, mensaje, titulo){
     asegurarContenedores();
-
-    // Disparar sonido según el tipo
     reproducirSonidoNotificacion(tipo);
 
     const stack = document.getElementById('notifStack');
@@ -175,7 +161,6 @@
 
     const el = document.createElement('div');
     el.className = 'notif-toast notif-' + tipo;
-
     el.innerHTML =
       '<div class="notif-icono">' + (ICONOS[tipo] || 'ℹ️') + '</div>' +
       '<div class="notif-texto">' +
@@ -191,26 +176,21 @@
     function cerrar(){
       el.classList.add('notif-out');
       setTimeout(function(){
-        if(el.parentNode){
-          el.parentNode.removeChild(el);
-        }
+        if(el.parentNode) el.parentNode.removeChild(el);
       }, 350);
     }
 
     el.querySelector('.notif-cerrar').addEventListener('click', cerrar);
-
     const timeoutId = setTimeout(cerrar, DURACION_MS);
 
     el.addEventListener('mouseenter', function(){
       clearTimeout(timeoutId);
       const barra = el.querySelector('.notif-barra');
-      if(barra){ barra.style.animationPlayState = 'paused'; }
+      if(barra) barra.style.animationPlayState = 'paused';
     });
   }
 
-  // ===================================================
-  // 5. CREAR NOTIFICACIÓN (PUENTE CAMPANA + TOAST + AUDIO)
-  // ===================================================
+  // 6. CREAR NOTIFICACIÓN (PUENTE GLOBAL)
   window.crearNotificacion = function(mensaje, tipo, titulo){
     tipo = tipo || 'info';
     titulo = titulo || (tipo === 'success' ? 'Éxito' : tipo === 'error' ? 'Error' : 'Notificación del Sistema');
@@ -239,172 +219,161 @@
       console.error('Error registrando notificación:', err);
     }
 
-    // Disparar toast y sonido
     toast(tipo, mensaje, titulo);
   };
 
-  // ===================================================
-  // 6. MODALES BASE (CONFIRM & PROMPT)
-  // ===================================================
-  function abrirModal(config){
-    asegurarContenedores();
-    reproducirSonidoNotificacion('warning');
+  // 7. MARCAR COMO LEÍDA UNA O TODAS (SOLO PARA EL USUARIO ACTUAL)
+  window.marcarNotificacionLeida = function(id) {
+    const lista = obtenerHistorial();
+    const actualizada = lista.map(n => n.id === id ? { ...n, leida: true } : n);
+    guardarHistorial(actualizada);
+    window.actualizarContadorCampana();
+    if(typeof window.renderNotificaciones === 'function') window.renderNotificaciones();
+  };
 
-    return new Promise(function(resolve){
-      const overlay = document.getElementById('notifModalOverlay');
-      const icono = document.getElementById('notifModalIcono');
-      const titulo = document.getElementById('notifModalTitulo');
-      const mensaje = document.getElementById('notifModalMensaje');
-      const campoWrap = document.getElementById('notifModalCampoWrap');
-      const btnCancelar = document.getElementById('notifBtnCancelar');
-      const btnAceptar = document.getElementById('notifBtnAceptar');
-      const box = document.getElementById('notifModalBox');
+  window.marcarTodasNotificacionesLeidas = function() {
+    const lista = obtenerHistorial();
+    const actualizada = lista.map(n => ({ ...n, leida: true }));
+    guardarHistorial(actualizada);
+    window.actualizarContadorCampana();
+    if(typeof window.renderNotificaciones === 'function') window.renderNotificaciones();
+  };
 
-      box.style.setProperty('--notif-color', config.color || '#2563eb');
-      box.style.setProperty('--notif-bg', config.bg || '#eff6ff');
+  // 8. RENDERIZADO DEL PANEL DESPLEGABLE DE NOTIFICACIONES
+  window.renderNotificaciones = function () {
+    const contenedor = document.getElementById('listaNotificaciones') || document.getElementById('notificacionesBody');
+    if (!contenedor) return;
 
-      icono.innerText = config.icono || '❓';
-      titulo.innerText = config.titulo || 'Confirmar';
-      mensaje.innerText = config.mensaje || '';
+    const lista = obtenerHistorial();
+    if (lista.length === 0) {
+      contenedor.innerHTML = `<div style="text-align:center; padding:24px; color:#94a3b8; font-size:12px;">No tienes notificaciones registradas.</div>`;
+      return;
+    }
 
-      campoWrap.innerHTML = '';
+    contenedor.innerHTML = lista.map(n => `
+      <div onclick="window.marcarNotificacionLeida(${n.id})" style="padding:12px 14px; border-bottom:1px solid #f1f5f9; background:${n.leida ? '#ffffff' : '#f0f9ff'}; cursor:pointer; display:flex; flex-direction:column; gap:4px; transition:background 0.2s;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong style="font-size:12.5px; color:#0f172a;">${n.titulo}</strong>
+          <span style="font-size:10.5px; color:#94a3b8;">${n.fecha}</span>
+        </div>
+        <p style="margin:0; font-size:12px; color:#475569; line-height:1.4;">${n.mensaje}</p>
+      </div>
+    `).join('');
+  };
 
-      let campo = null;
-
-      if(config.tipoInput){
-        if(config.tipoInput === 'select' && config.opciones){
-          campo = document.createElement('select');
-          config.opciones.forEach(function(op){
-            const opt = document.createElement('option');
-            opt.value = op;
-            opt.innerText = op;
-            if(op === config.valorInicial) opt.selected = true;
-            campo.appendChild(opt);
-          });
-        }
-        else{
-          campo = document.createElement('input');
-          campo.type = config.tipoInput === 'password' ? 'password' : 'text';
-          campo.value = config.valorInicial || '';
-          campo.placeholder = config.placeholder || '';
-        }
-        campoWrap.appendChild(campo);
-      }
-
-      btnCancelar.style.display = config.soloAceptar ? 'none' : 'inline-block';
-      btnAceptar.innerText = config.textoAceptar || 'Aceptar';
-      btnCancelar.innerText = config.textoCancelar || 'Cancelar';
-
-      overlay.classList.add('active');
-
-      if(campo){
-        setTimeout(function(){ campo.focus(); if(campo.select){ campo.select(); } }, 150);
-      }
-      else{
-        setTimeout(function(){ btnAceptar.focus(); }, 150);
-      }
-
-      function limpiar(){
-        overlay.classList.remove('active');
-        btnAceptar.removeEventListener('click', onAceptar);
-        btnCancelar.removeEventListener('click', onCancelar);
-        overlay.removeEventListener('keydown', onKeyDown);
-      }
-
-      function onAceptar(){
-        const valor = campo ? campo.value : true;
-        limpiar();
-        resolve(valor);
-      }
-
-      function onCancelar(){
-        limpiar();
-        resolve(config.tipoInput ? null : false);
-      }
-
-      function onKeyDown(e){
-        if(e.key === 'Enter'){
-          onAceptar();
-        }
-        if(e.key === 'Escape'){
-          onCancelar();
-        }
-      }
-
-      btnAceptar.addEventListener('click', onAceptar);
-      btnCancelar.addEventListener('click', onCancelar);
-      overlay.addEventListener('keydown', onKeyDown);
-    });
-  }
-
-  // ===================================================
-  // 7. API PÚBLICA & COMPATIBILIDAD
-  // ===================================================
+  // 9. API PÚBLICA MODALES (CONFIRM / PROMPT)
   window.Notif = {
-    success: function(mensaje, titulo){ toast('success', mensaje, titulo); },
-    error:   function(mensaje, titulo){ toast('error', mensaje, titulo); },
-    warning: function(mensaje, titulo){ toast('warning', mensaje, titulo); },
-    info:    function(mensaje, titulo){ toast('info', mensaje, titulo); },
+    success: function(m, t){ toast('success', m, t); },
+    error:   function(m, t){ toast('error', m, t); },
+    warning: function(m, t){ toast('warning', m, t); },
+    info:    function(m, t){ toast('info', m, t); },
 
     confirm: function(mensaje, titulo){
-      return abrirModal({
-        mensaje: mensaje,
-        titulo: titulo || '¿Estás seguro?',
-        icono: '⚠️',
-        color: '#ef4444',
-        bg: '#fef2f2',
-        textoAceptar: 'Sí, continuar',
-        textoCancelar: 'Cancelar'
+      asegurarContenedores();
+      reproducirSonidoNotificacion('warning');
+      return new Promise(resolve => {
+        const overlay = document.getElementById('notifModalOverlay');
+        const box = document.getElementById('notifModalBox');
+        box.style.setProperty('--notif-color', '#ef4444');
+        box.style.setProperty('--notif-bg', '#fef2f2');
+
+        document.getElementById('notifModalIcono').innerText = '⚠️';
+        document.getElementById('notifModalTitulo').innerText = titulo || '¿Confirmar acción?';
+        document.getElementById('notifModalMensaje').innerText = mensaje || '';
+        document.getElementById('notifModalCampoWrap').innerHTML = '';
+
+        const btnCancel = document.getElementById('notifBtnCancelar');
+        const btnOk = document.getElementById('notifBtnAceptar');
+        btnCancel.style.display = 'inline-block';
+        btnCancel.innerText = 'Cancelar';
+        btnOk.innerText = 'Continuar';
+
+        overlay.classList.add('active');
+
+        function limpiar() {
+          overlay.classList.remove('active');
+          btnOk.removeEventListener('click', onOk);
+          btnCancel.removeEventListener('click', onCancel);
+        }
+        function onOk() { limpiar(); resolve(true); }
+        function onCancel() { limpiar(); resolve(false); }
+
+        btnOk.addEventListener('click', onOk);
+        btnCancel.addEventListener('click', onCancel);
       });
     },
 
     prompt: function(mensaje, titulo, valorInicial, opciones){
-      return abrirModal({
-        mensaje: mensaje,
-        titulo: titulo || 'Ingrese un valor',
-        icono: '✏️',
-        color: '#2563eb',
-        bg: '#eff6ff',
-        tipoInput: opciones ? 'select' : 'text',
-        opciones: opciones,
-        valorInicial: valorInicial || '',
-        textoAceptar: 'Guardar',
-        textoCancelar: 'Cancelar'
+      asegurarContenedores();
+      return new Promise(resolve => {
+        const overlay = document.getElementById('notifModalOverlay');
+        const box = document.getElementById('notifModalBox');
+        box.style.setProperty('--notif-color', '#2563eb');
+        box.style.setProperty('--notif-bg', '#eff6ff');
+
+        document.getElementById('notifModalIcono').innerText = '✏️';
+        document.getElementById('notifModalTitulo').innerText = titulo || 'Ingreso de datos';
+        document.getElementById('notifModalMensaje').innerText = mensaje || '';
+
+        const wrap = document.getElementById('notifModalCampoWrap');
+        wrap.innerHTML = '';
+
+        let input;
+        if(opciones && Array.isArray(opciones)) {
+          input = document.createElement('select');
+          opciones.forEach(op => {
+            const opt = document.createElement('option');
+            opt.value = op;
+            opt.innerText = op;
+            if(op === valorInicial) opt.selected = true;
+            input.appendChild(opt);
+          });
+        } else {
+          input = document.createElement('input');
+          input.type = 'text';
+          input.value = valorInicial || '';
+        }
+        wrap.appendChild(input);
+
+        const btnCancel = document.getElementById('notifBtnCancelar');
+        const btnOk = document.getElementById('notifBtnAceptar');
+        btnCancel.style.display = 'inline-block';
+        btnOk.innerText = 'Guardar';
+
+        overlay.classList.add('active');
+        setTimeout(() => input.focus(), 100);
+
+        function limpiar() {
+          overlay.classList.remove('active');
+          btnOk.removeEventListener('click', onOk);
+          btnCancel.removeEventListener('click', onCancel);
+        }
+        function onOk() { const val = input.value; limpiar(); resolve(val); }
+        function onCancel() { limpiar(); resolve(null); }
+
+        btnOk.addEventListener('click', onOk);
+        btnCancel.addEventListener('click', onCancel);
       });
     }
   };
 
-  window.notifAlert = function(mensaje){
-    let tipo = 'info';
-    const texto = String(mensaje).toLowerCase();
-
-    if(texto.includes('error') || texto.includes('❌') || texto.includes('no se pudo') || texto.includes('inválid') || texto.includes('invalid') || texto.includes('incorrect') || texto.includes('faltante') || texto.includes('debe ') || texto.includes('requerid')){
-      tipo = 'error';
-    }
-    else if(texto.includes('correctamente') || texto.includes('exitosa') || texto.includes('exitoso') || texto.includes('guardad') || texto.includes('actualizad') || texto.includes('eliminad') || texto.includes('creado') || texto.includes('registrad') || texto.includes('✅')){
-      tipo = 'success';
-    }
-    else if(texto.includes('cuidado') || texto.includes('advertencia') || texto.includes('⚠') || texto.includes('atención') || texto.includes('atencion')){
-      tipo = 'warning';
-    }
-
-    toast(tipo, mensaje);
+  window.notifAlert = function(m){
+    const t = String(m).toLowerCase();
+    const tipo = t.includes('error') || t.includes('no se pudo') ? 'error' : t.includes('correct') || t.includes('éxito') ? 'success' : 'warning';
+    toast(tipo, m);
   };
 
-  window.mostrarNotificacion = function(titulo, mensaje, tipo){
-    tipo = tipo || 'info';
-    if(!ICONOS[tipo]) tipo = 'info';
-    toast(tipo, mensaje, titulo);
+  window.mostrarNotificacion = function(t, m, tipo){
+    toast(tipo || 'info', m, t);
   };
 
-  // Inicialización automática
+  // Inicializar estado del usuario actual
   if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', function(){
+    document.addEventListener('DOMContentLoaded', () => {
       asegurarContenedores();
       window.actualizarContadorCampana();
     });
-  }
-  else{
+  } else {
     asegurarContenedores();
     window.actualizarContadorCampana();
   }
