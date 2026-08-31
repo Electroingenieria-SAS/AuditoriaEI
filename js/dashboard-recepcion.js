@@ -1,15 +1,7 @@
-// ======================
-// CONFIGURACIÓN SUPABASE
-// ======================
-// Nota: La anon key requiere RLS activo en Supabase.
-const SUPABASE_URL = 'https://hurxdjoiafkjoyrmyhbd.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'; // Utiliza tu clave pública segura
+// ==========================================================
+// DASHBOARD-RECEPCION.JS — Motor Ejecutivo de Analítica
+// ==========================================================
 
-const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// ======================
-// VARIABLES GLOBALES
-// ======================
 let graficoRecepciones = null;
 let graficoNovedades = null;
 let graficoTendencia = null;
@@ -19,26 +11,52 @@ const ORDEN_MESES = [
   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
 ];
 
-// Helper para evitar inyección en el DOM
 function sanitize(str) {
   const div = document.createElement('div');
   div.textContent = str || '';
   return div.innerHTML;
 }
 
+function actualizarKPI(id, valor) {
+  const el = document.getElementById(id);
+  if (el) el.innerText = valor;
+}
+
+// Obtener cliente Supabase garantizado
+function obtenerClienteSupabase() {
+  if (window.supabaseClient) return window.supabaseClient;
+  if (window.supabase && typeof window.supabase.createClient === 'function') {
+    const url = window.SUPABASE_URL || localStorage.getItem('supabase_url');
+    const key = window.SUPABASE_ANON_KEY || localStorage.getItem('supabase_key');
+    if (url && key) return window.supabase.createClient(url, key);
+  }
+  return null;
+}
+
 // ======================
 // CARGA DE DATOS
 // ======================
 async function cargarDashboard() {
-  try {
-    const { data, error } = await supabaseClient
-      .from('recepciones')
-      .select('created_at, novedad_original, estado, proveedor, material');
+  const client = obtenerClienteSupabase();
+  if (!client) {
+    console.error('No fue posible inicializar el cliente de Supabase.');
+    return;
+  }
 
-    if (error) throw error;
+  try {
+    const { data, error } = await client
+      .from('recepciones')
+      .select('created_at, novedad_original, estado, proveedor, material, faltantes, novedades, cantidad, porcentaje_revisado')
+      .order('id', { ascending: false });
+
+    if (error) {
+      console.error('Error consultando recepciones:', error.message);
+      return;
+    }
+
     construirDashboard(data || []);
   } catch (err) {
-    console.error('Error al cargar datos del dashboard:', err.message);
+    console.error('Error general en dashboard:', err);
   }
 }
 
@@ -46,7 +64,7 @@ async function cargarDashboard() {
 // CONSTRUCCIÓN DEL DASHBOARD
 // ======================
 function construirDashboard(recepciones) {
-  let totalRecepciones = 0;
+  let totalRecepciones = recepciones.length;
   let totalFaltantes = 0;
   let totalSobrantes = 0;
   let totalDanados = 0;
@@ -54,9 +72,7 @@ function construirDashboard(recepciones) {
   const resumenMeses = {};
 
   recepciones.forEach(item => {
-    totalRecepciones++;
-
-    const fecha = new Date(item.created_at);
+    const fecha = item.created_at ? new Date(item.created_at) : new Date();
     const mes = fecha.toLocaleString('es-CO', { month: 'long' }).toLowerCase();
 
     if (!resumenMeses[mes]) {
@@ -65,36 +81,51 @@ function construirDashboard(recepciones) {
 
     resumenMeses[mes].recepciones++;
 
-    const estado = (item.novedad_original || item.estado || '').toLowerCase().trim();
+    // Detección tolerante de faltantes (numérico o texto de estado)
+    const numFalt = Number(item.faltantes) || 0;
+    const estado = String(item.novedad_original || item.estado || '').toLowerCase().trim();
 
-    if (estado === 'faltante') {
+    if (numFalt > 0) {
+      totalFaltantes += numFalt;
+      resumenMeses[mes].faltantes += numFalt;
+    } else if (estado.includes('faltante')) {
       totalFaltantes++;
       resumenMeses[mes].faltantes++;
-    } else if (estado === 'sobrante') {
+    }
+
+    if (estado.includes('sobrante')) {
       totalSobrantes++;
       resumenMeses[mes].sobrantes++;
-    } else if (estado === 'dañado' || estado === 'danado') {
+    }
+
+    if (estado.includes('dañ') || estado.includes('dan')) {
       totalDanados++;
       resumenMeses[mes].danados++;
     }
   });
 
-  // KPIs
-  actualizarKPI('kpiTotalRecepciones', totalRecepciones);
-  actualizarKPI('kpiFaltantes', totalFaltantes);
-  actualizarKPI('kpiSobrantes', totalSobrantes);
-  actualizarKPI('kpiDanados', totalDanados);
+  // 1. Actualizar KPIs Principales
+  actualizarKPI('kpiTotalRecepciones', totalRecepciones.toLocaleString());
+  actualizarKPI('kpiFaltantes', totalFaltantes.toLocaleString());
+  actualizarKPI('kpiSobrantes', totalSobrantes.toLocaleString());
+  actualizarKPI('kpiDanados', totalDanados.toLocaleString());
 
-  // Tabla Consolidada
+  // 2. Meses ordenados cronológicamente
+  const mesesOrdenados = ORDEN_MESES.filter(m => resumenMeses[m]);
+
+  let mesMasActivo = '-';
+  let valorMasActivo = 0;
+  let mesMasCritico = '-';
+  let valorMasCritico = 0;
+
+  // 3. Tabla Consolidada
   const body = document.getElementById('dashboardRecepcionBody');
   if (body) {
     body.innerHTML = '';
-    const mesesOrdenados = ORDEN_MESES.filter(mes => resumenMeses[mes]);
 
-    let mesMasActivo = '-';
-    let valorMasActivo = 0;
-    let mesMasCritico = '-';
-    let valorMasCritico = 0;
+    if (mesesOrdenados.length === 0) {
+      body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:25px;color:#64748b;">No hay registros disponibles</td></tr>`;
+    }
 
     mesesOrdenados.forEach(mes => {
       const item = resumenMeses[mes];
@@ -102,43 +133,39 @@ function construirDashboard(recepciones) {
 
       if (item.recepciones > valorMasActivo) {
         valorMasActivo = item.recepciones;
-        mesMasActivo = mes;
+        mesMasActivo = mes.charAt(0).toUpperCase() + mes.slice(1);
       }
 
       if (totalNovedades > valorMasCritico) {
         valorMasCritico = totalNovedades;
-        mesMasCritico = mes;
+        mesMasCritico = mes.charAt(0).toUpperCase() + mes.slice(1);
       }
 
       body.innerHTML += `
         <tr>
-          <td>${sanitize(mes)}</td>
+          <td><strong>${sanitize(mes.toUpperCase())}</strong></td>
           <td>${item.recepciones}</td>
-          <td>${item.faltantes}</td>
-          <td>${item.sobrantes}</td>
-          <td>${item.danados}</td>
-          <td>${totalNovedades}</td>
+          <td><span style="color:#f97316;font-weight:700;">${item.faltantes}</span></td>
+          <td><span style="color:#2563eb;font-weight:700;">${item.sobrantes}</span></td>
+          <td><span style="color:#ef4444;font-weight:700;">${item.danados}</span></td>
+          <td><strong>${totalNovedades}</strong></td>
         </tr>
       `;
     });
-
-    actualizarKPI('mesMasActivo', mesMasActivo);
-    actualizarKPI('mesMasCritico', mesMasCritico);
-
-    // Gráficos y Top Rankings
-    crearGraficoRecepciones(mesesOrdenados, resumenMeses);
-    crearGraficoNovedades(totalFaltantes, totalSobrantes, totalDanados);
-    crearGraficoTendencia(mesesOrdenados, resumenMeses);
   }
+
+  // 4. Indicadores de Cabecera
+  actualizarKPI('mesMasActivo', mesMasActivo !== '-' ? `${mesMasActivo} (${valorMasActivo})` : '-');
+  actualizarKPI('mesMasCritico', mesMasCritico !== '-' ? `${mesMasCritico} (${valorMasCritico})` : '-');
 
   calcularSaludOperativa(totalRecepciones, totalFaltantes, totalSobrantes, totalDanados);
   construirTopProveedores(recepciones);
   construirTopMateriales(recepciones);
-}
 
-function actualizarKPI(id, valor) {
-  const el = document.getElementById(id);
-  if (el) el.innerText = valor;
+  // 5. Gráficos Chart.js
+  crearGraficoRecepciones(mesesOrdenados, resumenMeses);
+  crearGraficoNovedades(totalFaltantes, totalSobrantes, totalDanados, totalRecepciones);
+  crearGraficoTendencia(mesesOrdenados, resumenMeses);
 }
 
 // ======================
@@ -149,41 +176,61 @@ function crearGraficoRecepciones(meses, resumen) {
   if (!canvas) return;
   if (graficoRecepciones) graficoRecepciones.destroy();
 
+  const labels = meses.map(m => m.charAt(0).toUpperCase() + m.slice(1));
+  const data = meses.map(m => resumen[m].recepciones);
+
   graficoRecepciones = new Chart(canvas, {
     type: 'bar',
     data: {
-      labels: meses,
+      labels: labels.length ? labels : ['Sin datos'],
       datasets: [{
-        label: 'Recepciones Registradas',
-        data: meses.map(m => resumen[m].recepciones),
+        label: 'Recepciones',
+        data: data.length ? data : [0],
         backgroundColor: '#2563eb',
-        borderRadius: 8
+        borderRadius: 8,
+        barThickness: 28
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } }
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false } }
+      }
     }
   });
 }
 
-function crearGraficoNovedades(faltantes, sobrantes, danados) {
+function crearGraficoNovedades(faltantes, sobrantes, danados, totalRecs) {
   const canvas = document.getElementById('graficoNovedades');
   if (!canvas) return;
   if (graficoNovedades) graficoNovedades.destroy();
 
+  const conformes = Math.max(0, totalRecs - (faltantes + sobrantes + danados));
+
   graficoNovedades = new Chart(canvas, {
     type: 'doughnut',
     data: {
-      labels: ['Faltantes', 'Sobrantes', 'Dañados'],
+      labels: ['Conformes', 'Faltantes', 'Sobrantes', 'Dañados'],
       datasets: [{
-        data: [faltantes, sobrantes, danados],
-        backgroundColor: ['#f59e0b', '#3b82f6', '#ef4444']
+        data: [conformes, faltantes, sobrantes, danados],
+        backgroundColor: ['#16a34a', '#f97316', '#2563eb', '#ef4444'],
+        borderWidth: 3,
+        borderColor: '#ffffff'
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { position: 'bottom' } }
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { boxWidth: 12, padding: 14, font: { family: 'Poppins', size: 11.5 } }
+        }
+      },
+      cutout: '68%'
     }
   });
 }
@@ -193,22 +240,33 @@ function crearGraficoTendencia(meses, resumen) {
   if (!canvas) return;
   if (graficoTendencia) graficoTendencia.destroy();
 
+  const labels = meses.map(m => m.charAt(0).toUpperCase() + m.slice(1));
+  const data = meses.map(m => resumen[m].faltantes + resumen[m].sobrantes + resumen[m].danados);
+
   graficoTendencia = new Chart(canvas, {
     type: 'line',
     data: {
-      labels: meses,
+      labels: labels.length ? labels : ['Sin datos'],
       datasets: [{
-        label: 'Novedades',
-        data: meses.map(m => resumen[m].faltantes + resumen[m].sobrantes + resumen[m].danados),
+        label: 'Discrepancias Totales',
+        data: data.length ? data : [0],
         borderColor: '#ef4444',
-        backgroundColor: '#ef4444',
-        tension: 0.3,
-        fill: false
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        borderWidth: 3,
+        pointBackgroundColor: '#ef4444',
+        pointRadius: 5,
+        tension: 0.35,
+        fill: true
       }]
     },
     options: {
       responsive: true,
-      plugins: { legend: { display: false } }
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' } },
+        x: { grid: { color: '#f1f5f9' } }
+      }
     }
   });
 }
@@ -226,12 +284,12 @@ function construirTopProveedores(recepciones) {
   const proveedores = {};
   recepciones.forEach(item => {
     const estado = (item.novedad_original || item.estado || '').toLowerCase();
-    if (['faltante', 'sobrante', 'dañado', 'danado'].includes(estado)) {
+    const numFalt = Number(item.faltantes) || 0;
+    if (numFalt > 0 || ['faltante', 'sobrante', 'dañado', 'danado'].some(s => estado.includes(s))) {
       const p = item.proveedor || 'Sin Proveedor';
       proveedores[p] = (proveedores[p] || 0) + 1;
     }
   });
-
   renderRanking('topProveedoresBody', proveedores);
 }
 
@@ -239,12 +297,12 @@ function construirTopMateriales(recepciones) {
   const materiales = {};
   recepciones.forEach(item => {
     const estado = (item.novedad_original || item.estado || '').toLowerCase();
-    if (['faltante', 'sobrante', 'dañado', 'danado'].includes(estado)) {
+    const numFalt = Number(item.faltantes) || 0;
+    if (numFalt > 0 || ['faltante', 'sobrante', 'dañado', 'danado'].some(s => estado.includes(s))) {
       const m = item.material || 'Sin Material';
       materiales[m] = (materiales[m] || 0) + 1;
     }
   });
-
   renderRanking('topMaterialesBody', materiales);
 }
 
@@ -252,14 +310,17 @@ function renderRanking(elementId, dataset) {
   const body = document.getElementById(elementId);
   if (!body) return;
 
-  const ranking = Object.entries(dataset)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
+  const ranking = Object.entries(dataset).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  if (ranking.length === 0) {
+    body.innerHTML = `<tr><td colspan="2" style="text-align:center;padding:15px;color:#94a3b8;">Sin novedades registradas</td></tr>`;
+    return;
+  }
 
   body.innerHTML = ranking.map(([nombre, cantidad]) => `
     <tr>
-      <td>${sanitize(nombre)}</td>
-      <td>${cantidad}</td>
+      <td style="text-align:left;"><strong>${sanitize(nombre)}</strong></td>
+      <td style="text-align:right;"><span class="rank-badge">${cantidad}</span></td>
     </tr>
   `).join('');
 }
@@ -268,58 +329,29 @@ function renderRanking(elementId, dataset) {
 // EXPORTACIÓN A PDF
 // ======================
 document.addEventListener('click', (e) => {
-  if (e.target && e.target.id === 'exportarPdfBtn') {
+  if (e.target && e.target.closest('#exportarPdfBtn')) {
+    e.preventDefault();
     exportarDashboardPDF();
   }
 });
 
 function exportarDashboardPDF() {
-  if (!window.jspdf) return;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const fecha = new Date().toLocaleString('es-CO');
+  const element = document.getElementById('dashboardPrintArea');
+  const btn = document.getElementById('exportarPdfBtn');
+  if (btn) btn.style.display = 'none';
 
-  doc.setFontSize(18);
-  doc.text('ELECTROINGENIERÍA', 20, 20);
+  const opt = {
+    margin: 8,
+    filename: `Dashboard_Ejecutivo_Recepcion_${new Date().toISOString().split('T')[0]}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2 },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+  };
 
-  doc.setFontSize(13);
-  doc.text('Dashboard Ejecutivo de Recepciones', 20, 30);
-
-  doc.setFontSize(10);
-  doc.text(`Fecha de emisión: ${fecha}`, 20, 40);
-
-  const kpis = [
-    `Total Recepciones: ${document.getElementById('kpiTotalRecepciones')?.innerText || '0'}`,
-    `Faltantes: ${document.getElementById('kpiFaltantes')?.innerText || '0'}`,
-    `Sobrantes: ${document.getElementById('kpiSobrantes')?.innerText || '0'}`,
-    `Dañados: ${document.getElementById('kpiDanados')?.innerText || '0'}`,
-    `Mes más activo: ${document.getElementById('mesMasActivo')?.innerText || '-'}`,
-    `Mes más crítico: ${document.getElementById('mesMasCritico')?.innerText || '-'}`
-  ];
-
-  let y = 55;
-  kpis.forEach(texto => {
-    doc.text(texto, 20, y);
-    y += 8;
+  html2pdf().set(opt).from(element).save().then(() => {
+    if (btn) btn.style.display = '';
   });
-
-  y += 6;
-  doc.setFontSize(12);
-  doc.text('Consolidado Mensual', 20, y);
-  y += 8;
-
-  doc.setFontSize(10);
-  const filas = document.querySelectorAll('#dashboardRecepcionBody tr');
-  filas.forEach(fila => {
-    const textoFila = Array.from(fila.children).map(td => td.innerText).join(' | ');
-    doc.text(textoFila, 20, y);
-    y += 7;
-  });
-
-  doc.save('Dashboard_Recepciones.pdf');
 }
 
-// ======================
-// INICIALIZACIÓN
-// ======================
+// Inicialización al cargar la página
 document.addEventListener('DOMContentLoaded', cargarDashboard);
