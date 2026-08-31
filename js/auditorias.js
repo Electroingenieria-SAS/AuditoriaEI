@@ -1115,3 +1115,20 @@ window.iniciarRefreshAuditorias = function () {
     window.cargarAuditorias();
     window.iniciarRefreshAuditorias();
 })();
+
+// ==========================================================
+// AUTO-FOCUS & SALTO RÁPIDO CON TECLA 'ENTER'
+// ==========================================================
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && !["TEXTAREA", "BUTTON"].includes(e.target.tagName)) {
+    const form = e.target.closest("form, .form-grid");
+    if (form && !e.target.id.includes("drive")) {
+      e.preventDefault();
+      const focusables = Array.from(form.querySelectorAll("input, select, textarea"));
+      const index = focusables.indexOf(e.target);
+      if (index > -1 && index + 1 < focusables.length) {
+        focusables[index + 1].focus();
+      }
+    }
+  }
+});
