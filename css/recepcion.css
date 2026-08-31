@@ -1,5 +1,5 @@
 /*==================================================
-= ARCHIVO EXTERNO: css/recepcion.css
+= ARCHIVO EXTERNO: css/recepcion.css (PRO EDITION)
 ==================================================*/
 
 :root {
@@ -36,7 +36,9 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* HEADER HERO */
+/* ==================================================
+   HEADER HERO
+================================================== */
 .module-header {
   padding: 28px 36px;
   border-radius: 22px;
@@ -76,7 +78,9 @@
   color: rgba(226, 232, 240, 0.85);
 }
 
-/* KPIS */
+/* ==================================================
+   KPIS
+================================================== */
 .kpi-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -129,7 +133,9 @@
 .kpi-warning h3 { color: var(--amarillo); }
 .kpi-danger h3 { color: var(--rojo); }
 
-/* CARDS */
+/* ==================================================
+   CARDS GENERALES
+================================================== */
 .module-card {
   background: white;
   border-radius: var(--radio);
@@ -177,7 +183,9 @@
   color: var(--gris);
 }
 
-/* INPUTS Y FORMULARIO */
+/* ==================================================
+   INPUTS Y FORMULARIO
+================================================== */
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -231,7 +239,9 @@ textarea {
   resize: vertical;
 }
 
-/* BOTONES */
+/* ==================================================
+   BOTONES
+================================================== */
 .btn-primary {
   background: var(--gradiente-principal);
   color: white;
@@ -284,7 +294,9 @@ textarea {
   justify-content: flex-end;
 }
 
-/* TABLAS */
+/* ==================================================
+   TABLAS Y BOTONES MINI
+================================================== */
 .table-container {
   overflow-x: auto;
   border-radius: 14px;
@@ -323,7 +335,6 @@ textarea {
   background: #F8FAFC;
 }
 
-/* BOTONES MINI EN TABLA */
 .acciones-tabla-mini {
   display: flex;
   justify-content: center;
@@ -370,7 +381,9 @@ textarea {
 .estado-cerrado { background: #FEE2E2; color: #991B1B; }
 .estado-revisado { background: #DCFCE7; color: #166534; }
 
-/* ADJUNTOS */
+/* ==================================================
+   ADJUNTOS
+================================================== */
 .adjuntos-panel {
   background: #F8FAFC;
   border: 1px solid #E2E8F0;
@@ -437,7 +450,9 @@ textarea {
   cursor: pointer;
 }
 
-/* MODALES */
+/* ==================================================
+   MODALES GLOBALES
+================================================== */
 .modal-documentos {
   position: fixed;
   inset: 0;
@@ -482,35 +497,11 @@ textarea {
   color: white;
   cursor: pointer;
   font-size: 15px;
+  transition: background 0.2s;
 }
 
 .btn-cerrar-modal:hover {
   background: var(--rojo);
-}
-
-.gestion-layout {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 22px;
-  padding: 26px;
-}
-
-.modal-gestion-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 26px;
-  background: #F8FAFC;
-  border-top: 1px solid #E2E8F0;
-}
-
-.timeline-item {
-  background: #F8FAFC;
-  border-left: 3px solid var(--azul);
-  padding: 12px 16px;
-  border-radius: 0 10px 10px 0;
-  margin-bottom: 10px;
-  font-size: 12.5px;
 }
 
 .search-wrapper {
@@ -542,18 +533,11 @@ textarea {
   background: white;
 }
 
-@media (max-width: 820px) {
-  .gestion-layout { grid-template-columns: 1fr; }
-  .form-grid { grid-template-columns: 1fr; }
-  .input-search { width: 100%; }
-}
-
-/*==================================================
-= MODAL GESTIÓN COMPRAS & NOVEDADES — ULTRA PREMIUM
-==================================================*/
-
+/* ==================================================
+   MODAL GESTIÓN COMPRAS & NOVEDADES — ULTRA PREMIUM
+================================================== */
 .modal-gestion-pro {
-  width: 980px !important;
+  width: 1020px !important;
   max-width: 95% !important;
   border-radius: 24px !important;
   overflow: hidden !important;
@@ -600,7 +584,6 @@ textarea {
   margin: 3px 0 0 0;
 }
 
-/* LAYOUT EN 2 COLUMNAS */
 .modal-gestion-body {
   padding: 28px 32px;
   background: #f8fafc;
@@ -608,12 +591,12 @@ textarea {
 
 .gestion-grid-layout {
   display: grid;
-  grid-template-columns: 1fr 1.15fr;
+  grid-template-columns: 1fr 1.2fr;
   gap: 24px;
   align-items: stretch;
 }
 
-/* TARJETA IZQUIERDA (FORMULARIO) */
+/* FORMULARIO IZQUIERDA */
 .gestion-card-action {
   background: #ffffff;
   border-radius: 20px;
@@ -669,7 +652,7 @@ textarea {
   font-size: 14px;
 }
 
-/* TARJETA DERECHA (TIMELINE FEED) */
+/* TIMELINE DERECHA CON SEPARADORES */
 .gestion-card-timeline {
   background: #ffffff;
   border-radius: 20px;
@@ -714,14 +697,13 @@ textarea {
   font-family: 'JetBrains Mono', monospace;
 }
 
-/* SCROLL INDEPENDIENTE DE LA TIMELINE */
 .timeline-scroll-container {
-  max-height: 380px;
+  max-height: 450px;
   overflow-y: auto;
-  padding-right: 8px;
+  padding: 6px 10px 10px 4px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 0;
 }
 
 .timeline-scroll-container::-webkit-scrollbar {
@@ -733,13 +715,20 @@ textarea {
   border-radius: 20px;
 }
 
-/* CARDS DE LA TIMELINE */
+.timeline-item-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
 .timeline-card-item {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
   border-radius: 16px;
   padding: 16px;
   position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
 
@@ -747,7 +736,7 @@ textarea {
   background: #ffffff;
   border-color: #cbd5e1;
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .timeline-item-header {
@@ -763,29 +752,31 @@ textarea {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 700;
   color: #0f172a;
 }
 
 .user-tag-avatar {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: #e0e7ff;
-  color: #3730a3;
+  background: linear-gradient(135deg, #1d4ed8, #2563eb);
+  color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
 }
 
 .timeline-date-chip {
-  font-size: 11px;
+  font-size: 11.5px;
   color: #64748b;
   font-family: 'JetBrains Mono', monospace;
-  background: #ffffff;
+  background: #f1f5f9;
   border: 1px solid #e2e8f0;
   padding: 3px 8px;
   border-radius: 6px;
@@ -811,13 +802,44 @@ textarea {
 .badge-status-default { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; }
 
 .timeline-comment-box {
-  background: #ffffff;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 13px;
   color: #334155;
   line-height: 1.6;
+}
+
+/* LÍNEA DE SEPARACIÓN CON NODO CONECTOR */
+.timeline-separator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 34px;
+  margin: 0;
+}
+
+.timeline-separator::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(180deg, #cbd5e1 0%, #94a3b8 50%, #cbd5e1 100%);
+  z-index: 1;
+}
+
+.timeline-node-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2.5px solid #2563eb;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
 }
 
 .timeline-empty-state {
