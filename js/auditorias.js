@@ -115,7 +115,7 @@ function manejarErrorSupabase(error, mensajeUsuario) {
     notificar("Error", mensajeUsuario || error?.message || "Ocurrió un error inesperado", "error");
 }
 
-// 4. CONTROL Y CIERRE UNIVERSAL DE MODALES
+// 4. CONTROL Y CIERRE DE MODALES
 window.abrirModal = function (id) {
     const modal = obtenerElemento(id);
     if (modal) {
@@ -424,7 +424,7 @@ async function eliminarDocumentos(documentos) {
     await window.supabaseClient.from(DOCUMENTOS_TABLA).delete().in("id", ids);
 }
 
-// 8. CRUD AUDITORÍAS (CREACIÓN, LISTADO Y FILTRO)
+// 8. CRUD AUDITORÍAS
 async function guardarAuditoria() {
     const btnGuardar = obtenerElemento("guardarAuditoria");
 
@@ -594,8 +594,9 @@ window.verDocumentos = async function (id) {
         if (contador) contador.textContent = `${documentos.length} / ${ADJUNTOS_AUDITORIA?.MAX_ADJUNTOS || 10}`;
 
         const puedeEditar = window.tienePermiso?.("auditorias", "editar");
-        const panelAgregar = obtenerElemento("btnAgregarArchivoModal")?.closest(".adjuntos-panel");
-        if (panelAgregar) panelAgregar.style.display = puedeEditar ? "grid" : "none";
+        const panelAgregar = obtenerElemento("btnAgregarArchivoModal")?.closest(".adjuntos-panel") || 
+                             obtenerElemento("modalDocumentos")?.querySelector(".modal-documentos-form, .adjuntos-panel, .card-agregar-soportes");
+        if (panelAgregar) panelAgregar.style.display = puedeEditar ? "" : "none";
 
         if (documentos.length === 0) {
             lista.innerHTML = '<div class="adjunto-vacio">No existen soportes adjuntos.</div>';
@@ -631,6 +632,50 @@ window.verDocumentos = async function (id) {
         manejarErrorSupabase(error, "Error al abrir ventana de soportes.");
     }
 };
+
+// Subida directa desde el modal de documentos
+async function cargarArchivosDesdeModal(archivos) {
+    if (!auditoriaDocumentosModalId) return;
+    if (!window.tienePermiso?.("auditorias", "editar")) {
+        notificar("Sin permisos", "No tiene permisos para agregar soportes.");
+        return;
+    }
+    const temporales = [];
+    agregarArchivosALista(archivos, temporales, () => {});
+    if (!temporales.length) return;
+
+    const resultado = await agregarSoportesDirectos(auditoriaDocumentosModalId, temporales);
+    if (resultado.error) {
+        manejarErrorSupabase(resultado.error, resultado.error.message);
+        return;
+    }
+
+    await registrarEvento("EDITAR", `Se agregaron ${temporales.length} soporte(s) a la auditoría #${auditoriaDocumentosModalId}.`);
+    await window.verDocumentos(auditoriaDocumentosModalId);
+}
+
+async function cargarDriveDesdeModal() {
+    if (!auditoriaDocumentosModalId) return;
+    if (!window.tienePermiso?.("auditorias", "editar")) {
+        notificar("Sin permisos", "No tiene permisos para agregar soportes.");
+        return;
+    }
+    const input = obtenerElemento("driveLinkModalAuditoria") || obtenerElemento("modalDocumentos")?.querySelector("input[placeholder*='Drive']");
+    if (!input) return;
+
+    const temporales = [];
+    agregarDriveALista(input, temporales, () => {});
+    if (!temporales.length) return;
+
+    const resultado = await agregarSoportesDirectos(auditoriaDocumentosModalId, temporales);
+    if (resultado.error) {
+        manejarErrorSupabase(resultado.error, resultado.error.message);
+        return;
+    }
+
+    await registrarEvento("EDITAR", `Se agregó un enlace de Drive a la auditoría #${auditoriaDocumentosModalId}.`);
+    await window.verDocumentos(auditoriaDocumentosModalId);
+}
 
 window.descargarDocumento = async function (documentoId) {
     try {
@@ -749,7 +794,7 @@ async function guardarCambiosAuditoria() {
             return;
         }
 
-        // 1. Actualizar datos en BD
+        // 1. Actualizar BD
         const { error } = await window.supabaseClient
             .from(AUDITORIAS_TABLA)
             .update(datosNuevos)
@@ -760,7 +805,7 @@ async function guardarCambiosAuditoria() {
             return;
         }
 
-        // 2. Subir nuevos soportes
+        // 2. Subir soportes
         if (documentosEdicionSeleccionados.length > 0) {
             const resSoportes = await agregarSoportesDirectos(id, documentosEdicionSeleccionados);
             if (resSoportes.error) {
@@ -769,7 +814,7 @@ async function guardarCambiosAuditoria() {
             }
         }
 
-        // 3. Historial de cambios
+        // 3. Historial
         const cambios = generarCambios(auditoriaEnEdicion, datosNuevos, documentosEdicionSeleccionados.length > 0);
         if (cambios.length) {
             for (const c of cambios) {
@@ -899,13 +944,13 @@ window.editarEstado = async function (id) {
     }
 };
 
-// 13. DELEGACIÓN GLOBAL DE EVENTOS (Blindaje de Clicks y Modales)
+// 13. DELEGACIÓN GLOBAL DE EVENTOS (Blindaje de Clicks en Modales)
 document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") window.cerrarCualquierModal();
 });
 
 document.addEventListener("click", function (e) {
-    // A) Cierre de modales (Cualquier 'X' o botón de cerrar)
+    // A) Cierre de modales
     const btnCerrar = e.target.closest("#cerrarEditarAuditoria, #cerrarModalDocumentos, #cerrarDetalleAuditoria, .modal-close, .btn-close, .close-modal, [data-close-modal]");
     if (btnCerrar) {
         e.preventDefault();
@@ -919,35 +964,43 @@ document.addEventListener("click", function (e) {
         return;
     }
 
-    // B) Cierre al hacer clic en el backdrop oscuro
+    // B) Cierre por clic en el backdrop oscuro
     if (e.target.classList.contains("modal") || e.target.classList.contains("modal-auditoria")) {
         e.target.classList.remove("active");
         e.target.style.display = "none";
         return;
     }
 
-    // C) Botón "Seleccionar archivos" en Creación
-    const btnDocCrear = e.target.closest("#btnAgregarDocumento, .btn-agregar-soporte");
-    if (btnDocCrear) {
+    // C) Botón "Seleccionar archivos" DENTRO DEL MODAL DE DOCUMENTOS
+    const btnDocModal = e.target.closest("#btnAgregarArchivoModal, #modalDocumentos button[class*='btn']");
+    if (btnDocModal && e.target.closest("#modalDocumentos") && btnDocModal.innerText.includes("Seleccionar")) {
         e.preventDefault();
-        let input = obtenerElemento("documentoInput") || obtenerElemento("soporteInput");
+        let input = obtenerElemento("actualizarDocumentoInput") || obtenerElemento("documentoModalInput");
         if (!input) {
             input = document.createElement("input");
             input.type = "file";
-            input.id = "documentoInput";
+            input.id = "actualizarDocumentoInput";
             input.multiple = true;
             input.style.display = "none";
             document.body.appendChild(input);
         }
-        input.onchange = function (evento) {
-            agregarArchivosALista(evento.target.files, documentosSeleccionados, renderDocumentos);
+        input.onchange = async function (evento) {
+            await cargarArchivosDesdeModal(evento.target.files);
             evento.target.value = "";
         };
         input.click();
         return;
     }
 
-    // D) Botón "Seleccionar archivos" en Edición
+    // D) Botón "Agregar enlace" DENTRO DEL MODAL DE DOCUMENTOS
+    const btnDriveModal = e.target.closest("#btnAgregarDriveModal, #modalDocumentos button");
+    if (btnDriveModal && e.target.closest("#modalDocumentos") && btnDriveModal.innerText.includes("Agregar enlace")) {
+        e.preventDefault();
+        cargarDriveDesdeModal();
+        return;
+    }
+
+    // E) Botón "Seleccionar archivos" en Edición
     const btnDocEditar = e.target.closest("#btnAgregarDocumentoEdicion, .btn-agregar-soporte-edicion");
     if (btnDocEditar) {
         e.preventDefault();
@@ -968,7 +1021,28 @@ document.addEventListener("click", function (e) {
         return;
     }
 
-    // E) Botón "Agregar enlace" (Drive) en Creación
+    // F) Botón "Seleccionar archivos" en Formulario de Creación
+    const btnDocCrear = e.target.closest("#btnAgregarDocumento, .btn-agregar-soporte");
+    if (btnDocCrear) {
+        e.preventDefault();
+        let input = obtenerElemento("documentoInput") || obtenerElemento("soporteInput");
+        if (!input) {
+            input = document.createElement("input");
+            input.type = "file";
+            input.id = "documentoInput";
+            input.multiple = true;
+            input.style.display = "none";
+            document.body.appendChild(input);
+        }
+        input.onchange = function (evento) {
+            agregarArchivosALista(evento.target.files, documentosSeleccionados, renderDocumentos);
+            evento.target.value = "";
+        };
+        input.click();
+        return;
+    }
+
+    // G) Botones de Enlace Drive (Creación y Edición)
     if (e.target.closest("#btnAgregarDriveAuditoria")) {
         e.preventDefault();
         const driveInput = obtenerElemento("driveLinkAuditoria");
@@ -976,7 +1050,6 @@ document.addEventListener("click", function (e) {
         return;
     }
 
-    // F) Botón "Agregar enlace" (Drive) en Edición
     if (e.target.closest("#btnAgregarDriveEdicion")) {
         e.preventDefault();
         const driveInput = obtenerElemento("driveLinkEdicionAuditoria");
@@ -984,14 +1057,13 @@ document.addEventListener("click", function (e) {
         return;
     }
 
-    // G) Botón "Guardar Auditoría" (Creación)
+    // H) Botones Guardar
     if (e.target.closest("#guardarAuditoria")) {
         e.preventDefault();
         guardarAuditoria();
         return;
     }
 
-    // H) Botón "Guardar Cambios" (Edición)
     if (e.target.closest("#guardarEdicionAuditoria")) {
         e.preventDefault();
         guardarCambiosAuditoria();
@@ -999,10 +1071,13 @@ document.addEventListener("click", function (e) {
     }
 });
 
-// Soporte para presionar "Enter" en los inputs de Google Drive
+// Soporte para tecla Enter en inputs de Google Drive
 document.addEventListener("keydown", function (e) {
     if (e.key === "Enter") {
-        if (e.target && e.target.id === "driveLinkAuditoria") {
+        if (e.target && (e.target.id === "driveLinkModalAuditoria" || e.target.closest("#modalDocumentos"))) {
+            e.preventDefault();
+            cargarDriveDesdeModal();
+        } else if (e.target && e.target.id === "driveLinkAuditoria") {
             e.preventDefault();
             agregarDriveALista(e.target, documentosSeleccionados, renderDocumentos);
         } else if (e.target && e.target.id === "driveLinkEdicionAuditoria") {
