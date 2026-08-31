@@ -1,51 +1,44 @@
-// =====================================
-// MÓDULO DE USUARIOS & PERMISOS - AUDIT ERP
-// =====================================
+// =======================================================
+// CONTROLADOR MAESTRO DE USUARIOS & MATRIZ RBAC
+// =======================================================
 
-// Limpieza de scopes globales anteriores
 delete window.renderUsuarios;
 delete window.editarUsuario;
 delete window.eliminarUsuario;
 
-// Lista de módulos base para construcción de permisos
 const MODULOS_SISTEMA = ['inventario', 'recepcion', 'auditorias', 'usuarios', 'confiabilidad'];
 
-// Sanitización de entradas (inputs)
-function sanitizeText(str) {
-  return String(str || '').replace(/[<>'"`;()]/g, '').trim();
+function sanitizeInput(val) {
+  return String(val || '').replace(/[<>'"`;()]/g, '').trim();
 }
 
-// Helpers para selección rápida de switches
 window.toggleAllPermisos = function(estado) {
-  const switches = document.querySelectorAll('.permisos-grid input[type="checkbox"]');
+  const switches = document.querySelectorAll('.iam-matrix-grid input[type="checkbox"]');
   switches.forEach(sw => sw.checked = Boolean(estado));
 };
 
-// =====================================
+// =======================================================
 // GUARDAR USUARIO
-// =====================================
+// =======================================================
 async function guardarUsuario() {
   try {
     if (typeof window.tienePermiso === 'function' && !window.tienePermiso('usuarios', 'crear')) {
-      notifAlert('Acceso denegado: No cuenta con permisos de creación de usuarios.');
+      notifAlert('Acceso denegado: No tiene permisos para crear usuarios');
       return;
     }
 
-    const usuarioInput = document.getElementById('usuarioInput');
-    const passwordInput = document.getElementById('passwordInput');
-    const rolSelect = document.getElementById('rolUsuario');
+    const usuarioEl = document.getElementById('usuarioInput');
+    const passwordEl = document.getElementById('passwordInput');
+    const rolEl = document.getElementById('rolUsuario');
 
-    if (!usuarioInput || !passwordInput || !rolSelect) {
-      notifAlert('Error en la estructura del formulario');
-      return;
-    }
+    if (!usuarioEl || !passwordEl || !rolEl) return;
 
-    const usuario = sanitizeText(usuarioInput.value.toLowerCase());
-    const password = passwordInput.value.trim();
-    const rol = rolSelect.value;
+    const usuario = sanitizeInput(usuarioEl.value.toLowerCase());
+    const password = passwordEl.value.trim();
+    const rol = rolEl.value;
 
     if (!usuario || !password || !rol) {
-      notifAlert('Por favor complete todos los campos requeridos');
+      notifAlert('Complete todos los campos obligatorios');
       return;
     }
 
@@ -54,7 +47,7 @@ async function guardarUsuario() {
       return;
     }
 
-    // 1. Validar existencia previa
+    // Verificar si el usuario ya existe
     const { data: existente, error: errCheck } = await window.supabaseClient
       .from('usuarios')
       .select('id')
@@ -63,7 +56,7 @@ async function guardarUsuario() {
 
     if (errCheck) {
       console.error(errCheck);
-      notifAlert('Error validando disponibilidad del identificador');
+      notifAlert('Error al verificar disponibilidad');
       return;
     }
 
@@ -72,8 +65,8 @@ async function guardarUsuario() {
       return;
     }
 
-    // 2. Insertar Usuario
-    const { error: errInsertUser } = await window.supabaseClient
+    // Insertar en tabla usuarios
+    const { error: errInsert } = await window.supabaseClient
       .from('usuarios')
       .insert([{
         usuario: usuario,
@@ -82,28 +75,21 @@ async function guardarUsuario() {
         estado: 'Activo'
       }]);
 
-    if (errInsertUser) {
-      console.error(errInsertUser);
-      notifAlert('Error insertando las credenciales del usuario');
+    if (errInsert) {
+      console.error(errInsert);
+      notifAlert('Error al registrar usuario');
       return;
     }
 
-    // 3. Compilar Matriz de Permisos
-    const permisosPayload = MODULOS_SISTEMA.map(modulo => {
-      const getVal = (action) => {
-        const el = document.getElementById(`${modulo}${action}`);
-        return el ? el.checked : false;
-      };
-
-      return {
-        usuario: usuario,
-        modulo: modulo,
-        ver: getVal('Ver'),
-        crear: getVal('Crear'),
-        editar: getVal('Editar'),
-        eliminar: getVal('Eliminar')
-      };
-    });
+    // Mapear matriz de permisos
+    const permisosPayload = MODULOS_SISTEMA.map(mod => ({
+      usuario: usuario,
+      modulo: mod,
+      ver: Boolean(document.getElementById(`${mod}Ver`)?.checked),
+      crear: Boolean(document.getElementById(`${mod}Crear`)?.checked),
+      editar: Boolean(document.getElementById(`${mod}Editar`)?.checked),
+      eliminar: Boolean(document.getElementById(`${mod}Eliminar`)?.checked)
+    }));
 
     const { error: errPermisos } = await window.supabaseClient
       .from('permisos')
@@ -111,39 +97,35 @@ async function guardarUsuario() {
 
     if (errPermisos) {
       console.error(errPermisos);
-      notifAlert('Usuario creado, pero hubo un error asignando su matriz de permisos');
+      notifAlert('Usuario guardado, pero ocurrió un error en los permisos');
     }
 
-    // 4. Auditoría / Historial
     if (typeof guardarHistorial === 'function') {
-      await guardarHistorial(
-        'CREAR',
-        'USUARIOS',
-        `Se registró la identidad ${usuario} con rol ${rol.toUpperCase()}`
-      );
+      await guardarHistorial('CREAR', 'USUARIOS', `Se registró la identidad ${usuario} (${rol})`);
     }
 
-    window.renderUsuarios();
     limpiarFormulario();
-    notifAlert('Identidad y privilegios configurados exitosamente');
+    window.renderUsuarios();
+    notifAlert('Usuario y permisos configurados exitosamente');
 
-  } catch (error) {
-    console.error('Error general en guardarUsuario:', error);
-    notifAlert('Ocurrió un error inesperado al procesar la solicitud');
+  } catch (err) {
+    console.error('Error en guardarUsuario:', err);
+    notifAlert('Error procesando la solicitud');
   }
 }
 
-// =====================================
+// =======================================================
 // RENDERIZAR TABLA DE USUARIOS
-// =====================================
+// =======================================================
 window.renderUsuarios = async function() {
-  const body = document.getElementById('usuariosBody');
-  if (!body) return;
+  const tbody = document.getElementById('usuariosBody');
+  const countBadge = document.getElementById('totalUsuariosBadge');
+  if (!tbody) return;
 
-  body.innerHTML = `
+  tbody.innerHTML = `
     <tr>
-      <td colspan="4" style="text-align: center; color: #64748b; padding: 25px;">
-        Sincronizando directorio de usuarios...
+      <td colspan="4" style="text-align: center; color: #64748b; padding: 30px;">
+        Sincronizando directorio con Supabase...
       </td>
     </tr>`;
 
@@ -157,60 +139,74 @@ window.renderUsuarios = async function() {
 
     if (error) {
       console.error(error);
-      body.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #ef4444; padding: 20px;">Error al cargar usuarios</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #ef4444; padding: 25px;">Error al cargar registros</td></tr>`;
       return;
     }
 
+    if (countBadge) countBadge.innerText = data ? data.length : 0;
+
     if (!data || data.length === 0) {
-      body.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #64748b; padding: 25px;">No hay identidades registradas en el sistema</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #64748b; padding: 30px;">No hay identidades registradas</td></tr>`;
       return;
     }
 
     const puedeEditar = typeof window.tienePermiso === 'function' ? window.tienePermiso('usuarios', 'editar') : true;
     const puedeEliminar = typeof window.tienePermiso === 'function' ? window.tienePermiso('usuarios', 'eliminar') : true;
 
-    body.innerHTML = data.map(item => {
+    tbody.innerHTML = data.map(item => {
       const isActivo = item.estado === 'Activo';
       const initial = (item.usuario || 'U').charAt(0).toUpperCase();
+      const rolClass = (item.rol || 'auditor').toLowerCase();
 
       return `
         <tr>
           <td>
-            <div class="user-identity">
-              <div class="user-avatar-mini">${initial}</div>
-              <span>${item.usuario || '-'}</span>
+            <div class="iam-user-cell">
+              <div class="iam-avatar">${initial}</div>
+              <div>
+                <span class="iam-user-name">${item.usuario || '-'}</span>
+              </div>
             </div>
           </td>
           <td>
-            <span class="role-pill">${item.rol || 'Sin Rol'}</span>
+            <span class="iam-badge-role ${rolClass}">${item.rol || 'Sin Rol'}</span>
           </td>
           <td>
-            <span class="badge-status ${isActivo ? 'status-active' : 'status-inactive'}">
-              ● ${item.estado || 'Activo'}
+            <span class="iam-status-pill ${isActivo ? 'activo' : 'inactivo'}">
+              <span class="iam-status-dot"></span>
+              ${item.estado || 'Activo'}
             </span>
           </td>
-          <td class="text-right">
-            <div class="acciones-flex">
-              ${puedeEditar ? `<button class="btn-action-tech edit" onclick="editarUsuario(${item.id})">Editar</button>` : ''}
-              ${puedeEliminar ? `<button class="btn-action-tech delete" onclick="eliminarUsuario(${item.id})">Eliminar</button>` : ''}
+          <td>
+            <div class="iam-actions-wrap">
+              ${puedeEditar ? `
+                <button class="iam-btn-action edit" onclick="editarUsuario(${item.id})">
+                  ✏️ Editar
+                </button>
+              ` : ''}
+              ${puedeEliminar ? `
+                <button class="iam-btn-action delete" onclick="eliminarUsuario(${item.id})">
+                  🗑️ Eliminar
+                </button>
+              ` : ''}
             </div>
           </td>
         </tr>
       `;
     }).join('');
 
-  } catch (error) {
-    console.error('Error renderUsuarios:', error);
+  } catch (err) {
+    console.error('Error renderUsuarios:', err);
   }
 };
 
-// =====================================
+// =======================================================
 // EDITAR USUARIO
-// =====================================
+// =======================================================
 window.editarUsuario = async function(id) {
   try {
     if (typeof window.tienePermiso === 'function' && !window.tienePermiso('usuarios', 'editar')) {
-      notifAlert('Acceso denegado: No cuenta con permisos de edición');
+      notifAlert('Acceso denegado: No tiene permisos de edición');
       return;
     }
 
@@ -221,28 +217,28 @@ window.editarUsuario = async function(id) {
       .single();
 
     if (error || !usuario) {
-      notifAlert('No fue posible consultar los datos del usuario');
+      notifAlert('Usuario no encontrado');
       return;
     }
 
     const nuevaPassword = await Notif.prompt(
-      'Ingrese la nueva contraseña (o conserve la actual):',
-      'Actualizar Credenciales',
+      'Ingrese la nueva contraseña:',
+      'Modificar Clave de Acceso',
       usuario.password || ''
     );
     if (nuevaPassword === null) return;
 
     const nuevoRol = await Notif.prompt(
-      'Seleccione el rol correspondiente:',
-      'Asignar Privilegio',
+      'Seleccione el nuevo rol:',
+      'Asignación de Rol',
       usuario.rol,
       ['admin', 'lider', 'jefe', 'auditor', 'compras']
     );
     if (!nuevoRol) return;
 
     const nuevoEstado = await Notif.prompt(
-      'Estado operativo de la cuenta:',
-      'Estado de Identidad',
+      'Seleccione el estado de la cuenta:',
+      'Estado Operativo',
       usuario.estado || 'Activo',
       ['Activo', 'Inactivo']
     );
@@ -259,35 +255,35 @@ window.editarUsuario = async function(id) {
 
     if (errUpdate) {
       console.error(errUpdate);
-      notifAlert('Error al intentar actualizar la identidad');
+      notifAlert('Error al actualizar datos');
       return;
     }
 
     if (typeof guardarHistorial === 'function') {
-      await guardarHistorial('EDITAR', 'USUARIOS', `Se modificaron los atributos del usuario ${usuario.usuario}`);
+      await guardarHistorial('EDITAR', 'USUARIOS', `Se actualizó el perfil de ${usuario.usuario}`);
     }
 
     window.renderUsuarios();
     notifAlert('Identidad actualizada correctamente');
 
-  } catch (error) {
-    console.error('Error editarUsuario:', error);
+  } catch (err) {
+    console.error('Error en editarUsuario:', err);
   }
 };
 
-// =====================================
+// =======================================================
 // ELIMINAR USUARIO
-// =====================================
+// =======================================================
 window.eliminarUsuario = async function(id) {
   try {
     if (typeof window.tienePermiso === 'function' && !window.tienePermiso('usuarios', 'eliminar')) {
-      notifAlert('Acceso denegado: No cuenta con permisos para eliminar identidades');
+      notifAlert('Acceso denegado: No tiene permisos para eliminar usuarios');
       return;
     }
 
     const confirmar = await Notif.confirm(
-      'Se revocarán todos los accesos y se eliminarán sus registros de permisos.',
-      '¿Eliminar usuario permanentemente?'
+      'Se revocarán todos los accesos permanentemente.',
+      '¿Eliminar este usuario?'
     );
     if (!confirmar) return;
 
@@ -297,56 +293,51 @@ window.eliminarUsuario = async function(id) {
       .eq('id', id)
       .single();
 
-    const { error: errDelete } = await window.supabaseClient
+    const { error: errDel } = await window.supabaseClient
       .from('usuarios')
       .delete()
       .eq('id', id);
 
-    if (errDelete) {
-      console.error(errDelete);
-      notifAlert('Error eliminando el usuario');
+    if (errDel) {
+      console.error(errDel);
+      notifAlert('Error al eliminar usuario');
       return;
     }
 
     if (usuario && usuario.usuario) {
-      // Limpiar permisos asociados
       await window.supabaseClient
         .from('permisos')
         .delete()
         .eq('usuario', usuario.usuario);
 
       if (typeof guardarHistorial === 'function') {
-        await guardarHistorial('ELIMINAR', 'USUARIOS', `Se revocó y eliminó al usuario ${usuario.usuario}`);
+        await guardarHistorial('ELIMINAR', 'USUARIOS', `Se revocó al usuario ${usuario.usuario}`);
       }
     }
 
     window.renderUsuarios();
-    notifAlert('Usuario y credenciales eliminadas del sistema');
+    notifAlert('Usuario revocado del sistema');
 
-  } catch (error) {
-    console.error('Error eliminarUsuario:', error);
+  } catch (err) {
+    console.error('Error en eliminarUsuario:', err);
   }
 };
 
-// =====================================
-// BUSCADOR EN TIEMPO REAL
-// =====================================
-const buscarInput = document.getElementById('buscarUsuario');
-if (buscarInput) {
-  buscarInput.addEventListener('input', function() {
-    const query = this.value.toLowerCase().trim();
+// =======================================================
+// BUSCADOR REACTIVO & LIMPIEZA
+// =======================================================
+const searchInput = document.getElementById('buscarUsuario');
+if (searchInput) {
+  searchInput.addEventListener('input', function() {
+    const q = this.value.toLowerCase().trim();
     const rows = document.querySelectorAll('#usuariosBody tr');
 
-    rows.forEach(row => {
-      const text = row.innerText.toLowerCase();
-      row.style.display = text.includes(query) ? '' : 'none';
+    rows.forEach(r => {
+      r.style.display = r.innerText.toLowerCase().includes(q) ? '' : 'none';
     });
   });
 }
 
-// =====================================
-// LIMPIEZA DE FORMULARIO
-// =====================================
 function limpiarFormulario() {
   const u = document.getElementById('usuarioInput');
   const p = document.getElementById('passwordInput');
@@ -359,10 +350,10 @@ function limpiarFormulario() {
   window.toggleAllPermisos(false);
 }
 
-// Event Listeners e Inicialización
 const btnGuardar = document.getElementById('guardarUsuario');
 if (btnGuardar) {
   btnGuardar.addEventListener('click', guardarUsuario);
 }
 
+// Carga inicial
 window.renderUsuarios();
