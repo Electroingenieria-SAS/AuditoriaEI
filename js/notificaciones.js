@@ -1,19 +1,5 @@
 // =====================================================
-// SISTEMA DE NOTIFICACIONES PREMIUM - GLOBAL (PRO)
-// Reemplaza alert() / confirm() / prompt() en TODOS los módulos.
-//
-// API:
-//   Notif.success(mensaje, titulo)
-//   Notif.error(mensaje, titulo)
-//   Notif.warning(mensaje, titulo)
-//   Notif.info(mensaje, titulo)
-//   Notif.confirm(mensaje, titulo)                          -> Promise<boolean>
-//   Notif.prompt(mensaje, titulo, valorInicial, opciones)   -> Promise<string|null>
-//
-// Métodos de Integración ERP:
-//   window.crearNotificacion(mensaje, tipo, titulo)         -> Guarda en historial, actualiza campana y lanza Toast
-//   window.mostrarNotificacion(titulo, mensaje, tipo)
-//   window.notifAlert(mensaje)
+// SISTEMA DE NOTIFICACIONES PREMIUM - GLOBAL (CON SONIDO)
 // =====================================================
 
 (function(){
@@ -38,7 +24,74 @@
   const DURACION_MS = 4200;
 
   // ===================================================
-  // 1. INYECTAR CONTENEDORES SI NO EXISTEN
+  // 1. MOTOR DE AUDIO NATIVO (WEB AUDIO API)
+  // ===================================================
+  let audioCtx = null;
+
+  function reproducirSonidoNotificacion(tipo = 'info') {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+
+      if (!audioCtx) {
+        audioCtx = new AudioContext();
+      }
+
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+
+      const ahora = audioCtx.currentTime;
+
+      // Configuraciones armónicas según el tipo de alerta
+      const configSonido = {
+        success: [
+          { f: 523.25, d: 0.08, t: 0 },     // C5
+          { f: 659.25, d: 0.12, t: 0.08 },  // E5
+          { f: 1046.50, d: 0.25, t: 0.18 }  // C6 (Tono brillante de éxito)
+        ],
+        warning: [
+          { f: 440.00, d: 0.12, t: 0 },     // A4
+          { f: 554.37, d: 0.20, t: 0.10 }   // C#5
+        ],
+        error: [
+          { f: 311.13, d: 0.15, t: 0 },     // Eb4
+          { f: 233.08, d: 0.28, t: 0.12 }   // Bb3 (Tono grave de advertencia)
+        ],
+        info: [
+          { f: 587.33, d: 0.09, t: 0 },     // D5
+          { f: 880.00, d: 0.18, t: 0.08 }   // A5 (Campana moderna)
+        ]
+      };
+
+      const notas = configSonido[tipo] || configSonido.info;
+
+      notas.forEach(nota => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+
+        osc.type = tipo === 'error' ? 'sawtooth' : 'sine';
+        osc.frequency.setValueAtTime(nota.f, ahora + nota.t);
+
+        // Curva de volumen suave (Fade In / Fade Out)
+        gain.gain.setValueAtTime(0.001, ahora + nota.t);
+        gain.gain.exponentialRampToValueAtTime(0.18, ahora + nota.t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ahora + nota.t + nota.d);
+
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+
+        osc.start(ahora + nota.t);
+        osc.stop(ahora + nota.t + nota.d);
+      });
+
+    } catch (e) {
+      console.warn('El navegador restringió la reproducción de audio automática:', e);
+    }
+  }
+
+  // ===================================================
+  // 2. INYECTAR CONTENEDORES SI NO EXISTEN
   // ===================================================
   function asegurarContenedores(){
     if(!document.getElementById('notifStack')){
@@ -66,7 +119,6 @@
       document.body.appendChild(overlay);
     }
 
-    // Cargar el CSS premium automáticamente si no está en el head
     if(!document.getElementById('notifPremiumCSS')){
       const link = document.createElement('link');
       link.id = 'notifPremiumCSS';
@@ -80,7 +132,7 @@
   }
 
   // ===================================================
-  // 2. PERSISTENCIA EN LOCALSTORAGE & CAMPANA ERP
+  // 3. PERSISTENCIA EN LOCALSTORAGE & CAMPANA ERP
   // ===================================================
   function obtenerHistorial(){
     try {
@@ -110,10 +162,13 @@
   };
 
   // ===================================================
-  // 3. TOAST VISUAL
+  // 4. TOAST VISUAL + AUDIO
   // ===================================================
   function toast(tipo, mensaje, titulo){
     asegurarContenedores();
+
+    // Disparar sonido según el tipo
+    reproducirSonidoNotificacion(tipo);
 
     const stack = document.getElementById('notifStack');
     if(!stack) return;
@@ -154,7 +209,7 @@
   }
 
   // ===================================================
-  // 4. CREAR NOTIFICACIÓN (PUENTE CAMPANA + TOAST)
+  // 5. CREAR NOTIFICACIÓN (PUENTE CAMPANA + TOAST + AUDIO)
   // ===================================================
   window.crearNotificacion = function(mensaje, tipo, titulo){
     tipo = tipo || 'info';
@@ -181,18 +236,19 @@
 
       window.dispatchEvent(new CustomEvent('nuevaNotificacion', { detail: nueva }));
     } catch(err) {
-      console.error('Error registrando notificación en el historial:', err);
+      console.error('Error registrando notificación:', err);
     }
 
-    // Disparar toast visual
+    // Disparar toast y sonido
     toast(tipo, mensaje, titulo);
   };
 
   // ===================================================
-  // 5. MODAL BASE (CONFIRM & PROMPT)
+  // 6. MODALES BASE (CONFIRM & PROMPT)
   // ===================================================
   function abrirModal(config){
     asegurarContenedores();
+    reproducirSonidoNotificacion('warning');
 
     return new Promise(function(resolve){
       const overlay = document.getElementById('notifModalOverlay');
@@ -282,7 +338,7 @@
   }
 
   // ===================================================
-  // 6. API PÚBLICA
+  // 7. API PÚBLICA & COMPATIBILIDAD
   // ===================================================
   window.Notif = {
     success: function(mensaje, titulo){ toast('success', mensaje, titulo); },
@@ -318,9 +374,6 @@
     }
   };
 
-  // ===================================================
-  // 7. COMPATIBILIDAD CON FUNCIONES GLOBALES
-  // ===================================================
   window.notifAlert = function(mensaje){
     let tipo = 'info';
     const texto = String(mensaje).toLowerCase();
