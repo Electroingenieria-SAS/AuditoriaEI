@@ -467,7 +467,7 @@ document.addEventListener("input", function (e) {
 });
 
 // ==========================================================
-// MODAL GESTIÓN COMPRAS & TIMELINE CON SEPARACIÓN VISUAL
+// MODAL GESTIÓN COMPRAS & TIMELINE (PARSER LIMPIO)
 // ==========================================================
 window.validarRecepcion = async function (id) {
   try {
@@ -502,30 +502,34 @@ window.validarRecepcion = async function (id) {
           </div>`;
         if (countBadge) countBadge.innerText = "0 Registros";
       } else {
-        // Dividir por bloques y limpiar espacios vacíos
         const bloques = textoSeguimiento.split("━━━━━━━━━━━━━━━━━━").reverse().filter(b => b.trim());
 
         if (countBadge) countBadge.innerText = `${bloques.length} ${bloques.length === 1 ? 'Registro' : 'Registros'}`;
 
         timeline.innerHTML = bloques.map((bloque, index) => {
-          // Extracción limpia de campos
+          // Extraer campos de encabezado
           const matchFecha = bloque.match(/📅\s*([^\n]+)/);
-          const matchUsuario = bloque.match(/👤\s*(?:Usuario:\s*)?([^\n]+)/i);
-          const matchEstado = bloque.match(/🏷️\s*(?:Estado:\s*)?([^\n]+)/i);
-
-          let comentario = bloque
-            .replace(/📅[^\n]*/g, "")
-            .replace(/👤[^\n]*/g, "")
-            .replace(/🏷️[^\n]*/g, "")
-            .replace(/📝\s*(?:Comentario:\s*)?/gi, "")
-            .trim();
+          const matchUsuario = bloque.match(/👤(?:\s*Usuario:)?\s*([^\n]+)/i);
+          const matchEstado = bloque.match(/🏷️(?:\s*Estado:)?\s*([^\n]+)/i);
 
           const fecha = matchFecha ? matchFecha[1].trim() : "Fecha no registrada";
           const usuario = matchUsuario ? matchUsuario[1].trim() : "Compras";
           const estado = matchEstado ? matchEstado[1].trim() : "Seguimiento";
           const inicial = usuario.charAt(0).toUpperCase();
 
-          // Configurar clase de badge según estado
+          // Limpiar el comentario para que no repita usuario ni estado
+          let lineas = bloque.split("\n").map(l => l.trim()).filter(Boolean);
+          let lineasFiltradas = lineas.filter(l => {
+            const low = l.toLowerCase();
+            if (l.startsWith("📅") || l.startsWith("👤") || l.startsWith("🏷️") || l.startsWith("📝")) return false;
+            if (low === usuario.toLowerCase() || low === estado.toLowerCase()) return false;
+            if (low.startsWith("usuario:") || low.startsWith("estado:") || low.startsWith("comentario:")) return false;
+            return true;
+          });
+
+          let comentarioFinal = lineasFiltradas.join("\n").trim() || "Sin comentario adicional.";
+
+          // Estilo del badge según estado
           let badgeClass = "badge-status-default";
           const estadoLower = estado.toLowerCase();
           if (estadoLower.includes("pendiente")) badgeClass = "badge-status-pendiente";
@@ -534,7 +538,6 @@ window.validarRecepcion = async function (id) {
           else if (estadoLower.includes("solucion")) badgeClass = "badge-status-solucionado";
           else if (estadoLower.includes("cerrad")) badgeClass = "badge-status-cerrado";
 
-          // Verificar si es el último para no poner separador abajo
           const esUltimo = index === bloques.length - 1;
 
           return `
@@ -553,7 +556,7 @@ window.validarRecepcion = async function (id) {
                 </div>
 
                 <div class="timeline-comment-box">
-                  ${escaparHTML(comentario).replace(/\n/g, "<br>")}
+                  ${escaparHTML(comentarioFinal).replace(/\n/g, "<br>")}
                 </div>
               </div>
 
