@@ -1,10 +1,12 @@
 <!-- ===================================== -->
 <!-- MÓDULO DE RECEPCIÓN — PRO EDITION     -->
 <!-- ===================================== -->
- <link rel="stylesheet" href="css/recepcion.css">
+
 <div class="module-container">
 
-  <!-- HEADER HERO -->
+  <!-- ===================================== -->
+  <!-- HEADER HERO                           -->
+  <!-- ===================================== -->
   <header class="module-header">
     <div class="header-title">
       <div class="header-icon">📥</div>
@@ -15,7 +17,9 @@
     </div>
   </header>
 
-  <!-- KPIS PRINCIPALES -->
+  <!-- ===================================== -->
+  <!-- KPIS PRINCIPALES                      -->
+  <!-- ===================================== -->
   <div class="kpi-grid">
     <div class="kpi-card">
       <div class="kpi-header">
@@ -54,7 +58,9 @@
     </div>
   </div>
 
-  <!-- DASHBOARD RESUMEN MENSUAL -->
+  <!-- ===================================== -->
+  <!-- DASHBOARD RESUMEN MENSUAL             -->
+  <!-- ===================================== -->
   <section class="module-card">
     <div class="table-header">
       <div class="table-header-title">
@@ -82,13 +88,15 @@
           </tr>
         </thead>
         <tbody id="dashboardRecepcionBody">
-          <!-- Renderizado con JS -->
+          <!-- Renderizado dinámico vía JS -->
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- FORMULARIO DE REGISTRO RÁPIDO -->
+  <!-- ===================================== -->
+  <!-- FORMULARIO DE REGISTRO RÁPIDO        -->
+  <!-- ===================================== -->
   <section class="module-card">
     <div class="table-header">
       <div class="table-header-title">
@@ -204,7 +212,7 @@
         </div>
       </div>
 
-      <!-- BOTON GUARDAR -->
+      <!-- BOTÓN GUARDAR -->
       <div class="guardar-container" style="margin-top: 25px;">
         <button id="guardarRecepcion" class="btn-primary" type="button">
           <span class="btn-icon">💾</span> Guardar Recepción
@@ -213,7 +221,9 @@
     </form>
   </section>
 
-  <!-- TABLA DE RECEPCIONES REGISTRADAS -->
+  <!-- ===================================== -->
+  <!-- TABLA DE RECEPCIONES REGISTRADAS     -->
+  <!-- ===================================== -->
   <section class="module-card">
     <div class="table-header">
       <div class="table-header-title">
@@ -254,68 +264,94 @@
           </tr>
         </thead>
         <tbody id="recepcionesBody">
-          <!-- Renderizado dinámico -->
+          <!-- Renderizado dinámico vía JS -->
         </tbody>
       </table>
     </div>
   </section>
 
-  <!-- ==========================================
-       MODAL GESTIÓN COMPRAS
-  =========================================== -->
+  <!-- ===================================== -->
+  <!-- MODAL GESTIÓN COMPRAS (REDISENADO)   -->
+  <!-- ===================================== -->
   <div class="modal-documentos" id="modalGestion" role="dialog" aria-modal="true">
-    <div class="modal-documentos-content modal-gestion-custom">
-      <div class="modal-header">
-        <div>
-          <h3>🛒 Gestión de Compras & Novedades</h3>
-          <p style="font-size:12px; opacity:0.85; margin:0;">Trazabilidad y acuerdos con el proveedor</p>
+    <div class="modal-documentos-content modal-gestion-pro">
+      
+      <!-- HEADER HERO DEL MODAL -->
+      <div class="modal-header modal-header-gestion">
+        <div class="header-gestion-info">
+          <div class="gestion-icon-badge">🛒</div>
+          <div>
+            <h3>Gestión de Compras & Novedades</h3>
+            <p>Trazabilidad cronológica, acuerdos y resolución de discrepancias con proveedores.</p>
+          </div>
         </div>
-        <button class="btn-cerrar-modal" type="button" onclick="cerrarModalGestion()">✕</button>
+        <button class="btn-cerrar-modal" type="button" onclick="cerrarModalGestion()" title="Cerrar modal (Esc)">✕</button>
       </div>
 
+      <!-- BODY EN DOS COLUMNAS -->
       <div class="modal-gestion-body">
-        <div class="gestion-layout">
-          <!-- FORMULARIO GESTIÓN -->
-          <div class="gestion-formulario">
+        <div class="gestion-grid-layout">
+          
+          <!-- COLUMNA IZQUIERDA: FORMULARIO DE ACCIÓN -->
+          <div class="gestion-card-action">
+            <div class="card-action-title">
+              <span class="action-bullet"></span>
+              <h4>Nueva Intervención</h4>
+            </div>
+
             <div class="input-group">
               <label for="gestionEstadoInput">ESTADO DE GESTIÓN</label>
-              <select id="gestionEstadoInput">
-                <option value="Pendiente">🟡 Pendiente</option>
-                <option value="En Gestión Compras">🛒 En Gestión Compras</option>
-                <option value="Contactando Proveedor">📞 Contactando Proveedor</option>
-                <option value="Esperando Respuesta">📦 Esperando Respuesta</option>
-                <option value="Solucionado">🟢 Solucionado</option>
-                <option value="Cerrado">🔒 Cerrado</option>
-              </select>
+              <div class="select-wrapper-custom">
+                <select id="gestionEstadoInput">
+                  <option value="Pendiente">🟡 Pendiente de Revisión</option>
+                  <option value="En Gestión Compras">🛒 En Gestión por Compras</option>
+                  <option value="Contactando Proveedor">📞 Contactando Proveedor</option>
+                  <option value="Esperando Respuesta">📦 Esperando Respuesta / Reposición</option>
+                  <option value="Solucionado">🟢 Solucionado / Mercancía Conforme</option>
+                  <option value="Cerrado">🔒 Novedad Cerrada Definitiva</option>
+                </select>
+              </div>
             </div>
 
-            <div class="input-group textarea-group">
-              <label for="gestionComentarioInput">COMENTARIO / REGISTRO DE SEGUIMIENTO</label>
-              <textarea id="gestionComentarioInput" placeholder="Describa el acuerdo, respuesta del proveedor o nota interna..."></textarea>
+            <div class="input-group textarea-group" style="margin-top: 16px;">
+              <label for="gestionComentarioInput">REGISTRO DE SEGUIMIENTO / ACUERDOS</label>
+              <textarea
+                id="gestionComentarioInput"
+                placeholder="Escriba los detalles de la conversación, número de radicado, notas crédito o acuerdos alcanzados..."
+              ></textarea>
+            </div>
+
+            <div class="gestion-action-footer">
+              <button class="btn-primary btn-full-action" id="guardarGestionBtn" type="button">
+                <span class="btn-icon">💾</span> Registrar Seguimiento
+              </button>
             </div>
           </div>
 
-          <!-- TIMELINE SEGUIMIENTO -->
-          <div class="gestion-historial">
-            <div class="timeline-header">
-              <h4>Historial de Intervenciones</h4>
-              <span>Trazabilidad cronológica de compras</span>
+          <!-- COLUMNA DERECHA: TIMELINE DE AUDITORÍA -->
+          <div class="gestion-card-timeline">
+            <div class="timeline-head-row">
+              <div>
+                <h4>Historial de Intervenciones</h4>
+                <span class="timeline-subtitle">Línea de tiempo de acciones ejecutadas</span>
+              </div>
+              <span class="timeline-count-badge" id="timelineCountBadge">0 Registros</span>
             </div>
-            <div id="timelineSeguimiento"></div>
+
+            <div class="timeline-scroll-container" id="timelineSeguimiento">
+              <!-- Renderizado dinámico vía JS -->
+            </div>
           </div>
+
         </div>
       </div>
 
-      <div class="modal-gestion-footer">
-        <button class="btn-ghost" type="button" onclick="cerrarModalGestion()">Cancelar</button>
-        <button class="btn-primary" id="guardarGestionBtn" type="button">Guardar Gestión</button>
-      </div>
     </div>
   </div>
 
-  <!-- ==========================================
-       MODAL OBSERVACIÓN
-  =========================================== -->
+  <!-- ===================================== -->
+  <!-- MODAL OBSERVACIÓN                     -->
+  <!-- ===================================== -->
   <div class="modal-documentos" id="modalObservacion" role="dialog" aria-modal="true">
     <div class="modal-documentos-content" style="max-width: 600px;">
       <div class="modal-header">
@@ -326,9 +362,9 @@
     </div>
   </div>
 
-  <!-- ==========================================
-       MODAL SOPORTES DOCUMENTALES
-  =========================================== -->
+  <!-- ===================================== -->
+  <!-- MODAL SOPORTES DOCUMENTALES          -->
+  <!-- ===================================== -->
   <div class="modal-documentos" id="modalSoportesRecepcion" role="dialog" aria-modal="true">
     <div class="modal-documentos-content">
       <div class="modal-header">
