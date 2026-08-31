@@ -467,7 +467,7 @@ document.addEventListener("input", function (e) {
 });
 
 // ==========================================================
-// MODAL GESTIÓN COMPRAS (PARSER ULTRA PREMIUM)
+// MODAL GESTIÓN COMPRAS & TIMELINE CON SEPARACIÓN VISUAL
 // ==========================================================
 window.validarRecepcion = async function (id) {
   try {
@@ -495,23 +495,24 @@ window.validarRecepcion = async function (id) {
 
       if (!textoSeguimiento) {
         timeline.innerHTML = `
-          <div class="timeline-empty-state">
-            <div class="timeline-empty-icon">📋</div>
-            <h5>Sin intervenciones previas</h5>
-            <p>Registre el primer seguimiento con el proveedor en el panel lateral.</p>
+          <div class="timeline-empty-state" style="text-align:center; padding:40px 20px; color:#94a3b8;">
+            <div style="font-size:32px; margin-bottom:10px;">📋</div>
+            <h5 style="color:#475569; font-size:14px; margin:0 0 4px 0;">Sin intervenciones registradas</h5>
+            <p style="font-size:12px; margin:0;">Agregue un seguimiento en el formulario lateral.</p>
           </div>`;
         if (countBadge) countBadge.innerText = "0 Registros";
       } else {
+        // Dividir por bloques y limpiar espacios vacíos
         const bloques = textoSeguimiento.split("━━━━━━━━━━━━━━━━━━").reverse().filter(b => b.trim());
 
         if (countBadge) countBadge.innerText = `${bloques.length} ${bloques.length === 1 ? 'Registro' : 'Registros'}`;
 
-        timeline.innerHTML = bloques.map(bloque => {
-          // Extraer fecha, usuario, estado y comentario usando expresiones regulares
+        timeline.innerHTML = bloques.map((bloque, index) => {
+          // Extracción limpia de campos
           const matchFecha = bloque.match(/📅\s*([^\n]+)/);
           const matchUsuario = bloque.match(/👤\s*(?:Usuario:\s*)?([^\n]+)/i);
           const matchEstado = bloque.match(/🏷️\s*(?:Estado:\s*)?([^\n]+)/i);
-          
+
           let comentario = bloque
             .replace(/📅[^\n]*/g, "")
             .replace(/👤[^\n]*/g, "")
@@ -524,6 +525,7 @@ window.validarRecepcion = async function (id) {
           const estado = matchEstado ? matchEstado[1].trim() : "Seguimiento";
           const inicial = usuario.charAt(0).toUpperCase();
 
+          // Configurar clase de badge según estado
           let badgeClass = "badge-status-default";
           const estadoLower = estado.toLowerCase();
           if (estadoLower.includes("pendiente")) badgeClass = "badge-status-pendiente";
@@ -532,32 +534,45 @@ window.validarRecepcion = async function (id) {
           else if (estadoLower.includes("solucion")) badgeClass = "badge-status-solucionado";
           else if (estadoLower.includes("cerrad")) badgeClass = "badge-status-cerrado";
 
+          // Verificar si es el último para no poner separador abajo
+          const esUltimo = index === bloques.length - 1;
+
           return `
-            <div class="timeline-card-item">
-              <div class="timeline-item-header">
-                <div class="timeline-user-tag">
-                  <div class="user-tag-avatar">${inicial}</div>
-                  <span>${escaparHTML(usuario)}</span>
+            <div class="timeline-item-wrapper">
+              <div class="timeline-card-item">
+                <div class="timeline-item-header">
+                  <div class="timeline-user-tag">
+                    <div class="user-tag-avatar">${inicial}</div>
+                    <span class="timeline-user-name">${escaparHTML(usuario)}</span>
+                  </div>
+                  <span class="timeline-date-chip">📅 ${escaparHTML(fecha)}</span>
                 </div>
-                <span class="timeline-date-chip">📅 ${escaparHTML(fecha)}</span>
+
+                <div>
+                  <span class="timeline-badge-status ${badgeClass}">● ${escaparHTML(estado)}</span>
+                </div>
+
+                <div class="timeline-comment-box">
+                  ${escaparHTML(comentario).replace(/\n/g, "<br>")}
+                </div>
               </div>
-              <div>
-                <span class="timeline-badge-status ${badgeClass}">● ${escaparHTML(estado)}</span>
-              </div>
-              <div class="timeline-comment-box">
-                ${escaparHTML(comentario).replace(/\n/g, "<br>")}
-              </div>
-            </div>`;
+
+              ${!esUltimo ? `
+                <div class="timeline-separator">
+                  <div class="timeline-node-dot"></div>
+                </div>
+              ` : ''}
+            </div>
+          `;
         }).join("");
       }
     }
 
     window.abrirModal("modalGestion");
   } catch (err) {
-    console.error("Error al abrir gestión de compras:", err);
+    console.error("Error abriendo gestión de compras:", err);
   }
 };
-
 // Guardar Gestión Compras
 async function guardarGestion() {
   const btn = obtenerElemento("guardarGestionBtn");
