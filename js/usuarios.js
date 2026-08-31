@@ -1,1210 +1,368 @@
-// ======================
-// LIMPIAR VARIABLES
-// ======================
+// =====================================
+// MÓDULO DE USUARIOS & PERMISOS - AUDIT ERP
+// =====================================
 
+// Limpieza de scopes globales anteriores
 delete window.renderUsuarios;
 delete window.editarUsuario;
 delete window.eliminarUsuario;
-// ====================
 
-// EVENTO
-// ======================
+// Lista de módulos base para construcción de permisos
+const MODULOS_SISTEMA = ['inventario', 'recepcion', 'auditorias', 'usuarios', 'confiabilidad'];
 
-var guardarUsuarioBtn =
-
-document.getElementById(
-  'guardarUsuario'
-);
-
-
-
-
-
-if(guardarUsuarioBtn){
-
-  guardarUsuarioBtn.addEventListener(
-
-    'click',
-
-    guardarUsuario
-
-  );
-
+// Sanitización de entradas (inputs)
+function sanitizeText(str) {
+  return String(str || '').replace(/[<>'"`;()]/g, '').trim();
 }
 
-
-
-
-
-// ======================
-// GUARDAR USUARIO
-// ======================
-
-async function guardarUsuario(){
-
-  try{
-
-    // ======================
-    // VALIDAR PERMISO
-    // ======================
-
-    if(
-
-      !window.tienePermiso(
-        'usuarios',
-        'crear'
-      )
-
-    ){
-
-      notifAlert(
-        'No tiene permisos'
-      );
-
-      return;
-
-    }
-
-
-
-
-
-    // ======================
-    // INPUTS
-    // ======================
-
-    const usuario =
-
-    document.getElementById(
-      'usuarioInput'
-    )
-    .value
-    .trim()
-    .toLowerCase();
-
-
-
-
-
-    const password =
-
-    document.getElementById(
-      'passwordInput'
-    )
-    .value
-    .trim();
-
-
-
-
-
-    const rol =
-
-    document.getElementById(
-      'rolUsuario'
-    )
-    .value;
-
-
-
-
-
-    // ======================
-    // VALIDAR
-    // ======================
-
-    if(
-
-      !usuario ||
-
-      !password ||
-
-      !rol
-
-    ){
-
-      notifAlert(
-        'Complete todos los campos'
-      );
-
-      return;
-
-    }
-
-
-
-
-
-    // ======================
-    // VALIDAR EXISTENTE
-    // ======================
-
-    const existente =
-
-    await window.supabaseClient
-
-    .from('usuarios')
-
-    .select('*')
-
-    .eq(
-
-      'usuario',
-
-      usuario
-
-    )
-
-    .limit(1);
-
-
-
-
-
-    if(
-
-      existente.data &&
-
-      existente.data.length > 0
-
-    ){
-
-      notifAlert(
-        'El usuario ya existe'
-      );
-
-      return;
-
-    }
-
-
-
-
-
-    // ======================
-    // INSERTAR
-    // ======================
-
-    const response =
-
-    await window.supabaseClient
-
-    .from('usuarios')
-
-    .insert([
-
-      {
-
-        usuario:
-        usuario,
-
-        password:
-        password,
-
-        rol:
-        rol,
-
-        estado:
-        'Activo'
-
-      }
-
-    ]);
-
-
-
-
-
-    if(response.error){
-
-      console.log(
-        response.error
-      );
-
-      notifAlert(
-        'Error guardando usuario'
-      );
-
-      return;
-
-    }
-
-
-
-
-
-    // ======================
-    // PERMISOS
-    // ======================
-
-    const permisos = [
-
-      {
-
-        usuario: usuario,
-
-        modulo:'inventario',
-
-        ver:
-        document.getElementById(
-          'inventarioVer'
-        ).checked,
-
-        crear:
-        document.getElementById(
-          'inventarioCrear'
-        ).checked,
-
-        editar:
-        document.getElementById(
-          'inventarioEditar'
-        ).checked,
-
-        eliminar:
-        document.getElementById(
-          'inventarioEliminar'
-        ).checked
-
-      },
-
-
-
-
-
-      {
-
-        usuario: usuario,
-
-        modulo:'recepcion',
-
-        ver:
-        document.getElementById(
-          'recepcionVer'
-        ).checked,
-
-        crear:
-        document.getElementById(
-          'recepcionCrear'
-        ).checked,
-
-        editar:
-        document.getElementById(
-          'recepcionEditar'
-        ).checked,
-
-        eliminar:
-        document.getElementById(
-          'recepcionEliminar'
-        ).checked
-
-      },
-
-
-
-
-
-      {
-
-        usuario: usuario,
-
-        modulo:'auditorias',
-
-        ver:
-        document.getElementById(
-          'auditoriasVer'
-        ).checked,
-
-        crear:
-        document.getElementById(
-          'auditoriasCrear'
-        ).checked,
-
-        editar:
-        document.getElementById(
-          'auditoriasEditar'
-        ).checked,
-
-        eliminar:
-        document.getElementById(
-          'auditoriasEliminar'
-        ).checked
-
-      },
-
-
-
-
-
-      {
-
-        usuario: usuario,
-
-        modulo:'usuarios',
-
-        ver:
-        document.getElementById(
-          'usuariosVer'
-        ).checked,
-
-        crear:
-        document.getElementById(
-          'usuariosCrear'
-        ).checked,
-
-        editar:
-        document.getElementById(
-          'usuariosEditar'
-        ).checked,
-
-        eliminar:
-        document.getElementById(
-          'usuariosEliminar'
-        ).checked
-
-      },
-
-
-
-
-
-     {
-
-    usuario: usuario,
-
-    modulo:'confiabilidad',
-
-    ver:
-    document.getElementById(
-      'confiabilidadVer'
-    ).checked,
-
-    crear:
-    document.getElementById(
-      'confiabilidadCrear'
-    ).checked,
-
-    editar:
-    document.getElementById(
-      'confiabilidadEditar'
-    ).checked,
-
-    eliminar:
-    document.getElementById(
-      'confiabilidadEliminar'
-    ).checked
-
-}
-
-    ];
-
-
-
-
-
-    const permisosResponse =
-
-    await window.supabaseClient
-
-    .from('permisos')
-
-    .insert(permisos);
-
-
-
-
-
-    if(permisosResponse.error){
-
-      console.log(
-        permisosResponse.error
-      );
-
-      notifAlert(
-        'Error guardando permisos'
-      );
-
-      return;
-
-    }
-
-
-
-
-
-    // ======================
-    // HISTORIAL
-    // ======================
-
-    if(typeof guardarHistorial === 'function'){
-
-      await guardarHistorial(
-
-        'CREAR',
-
-        'USUARIOS',
-
-        'Se creó el usuario ' +
-        usuario
-
-      );
-
-    }
-
-
-
-
-
-    renderUsuarios();
-
-    limpiarFormulario();
-
-
-
-
-
-    notifAlert(
-      'Usuario guardado correctamente'
-    );
-
-  }
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
-}
-
-
-
-
-
-// ======================
-// RENDER
-// ======================
-
-window.renderUsuarios = async function(){
-
-  try{
-
-    const body =
-
-    document.getElementById(
-      'usuariosBody'
-    );
-
-
-
-
-
-    if(!body){
-
-      return;
-
-    }
-
-
-
-
-
-    body.innerHTML = '';
-
-
-
-
-
-    const response =
-
-    await window.supabaseClient
-
-    .from('usuarios')
-
-    .select('*')
-
-    .order(
-
-      'id',
-
-      {
-
-        ascending:false
-
-      }
-
-    );
-
-
-
-
-
-    const data =
-    response.data;
-
-
-
-
-
-    if(!data || data.length === 0){
-
-      body.innerHTML =
-
-      '<tr>' +
-
-      '<td colspan="4">' +
-
-      'No hay usuarios registrados' +
-
-      '</td>' +
-
-      '</tr>';
-
-
-
-      return;
-
-    }
-
-
-
-
-
-    data.forEach(function(item){
-
-      let estadoClase =
-
-      item.estado === 'Activo'
-
-      ?
-
-      'estado-cerrado'
-
-      :
-
-      'estado-pendiente';
-
-
-
-
-
-      body.innerHTML +=
-
-      '<tr>' +
-
-
-
-
-
-      '<td>' +
-
-      (item.usuario || '-') +
-
-      '</td>' +
-
-
-
-
-
-      '<td>' +
-
-      (item.rol || '-') +
-
-      '</td>' +
-
-
-
-
-
-      '<td>' +
-
-      '<span class="' +
-
-      estadoClase +
-
-      '">' +
-
-      (item.estado || 'Activo') +
-
-      '</span>' +
-
-      '</td>' +
-
-
-
-
-
-      '<td>' +
-
-      '<div class="acciones-tabla">' +
-
-
-
-
-
-      (
-
-        window.tienePermiso(
-          'usuarios',
-          'editar'
-        )
-
-        ?
-
-        '<button ' +
-
-        'class="btn-editar" ' +
-
-        'onclick="editarUsuario(' +
-
-        item.id +
-
-        ')"' +
-
-        '>' +
-
-        'Editar' +
-
-        '</button>'
-
-        :
-
-        ''
-
-      )
-
-
-
-
-
-      +
-
-
-
-
-
-      (
-
-        window.tienePermiso(
-          'usuarios',
-          'eliminar'
-        )
-
-        ?
-
-        '<button ' +
-
-        'class="btn-eliminar" ' +
-
-        'onclick="eliminarUsuario(' +
-
-        item.id +
-
-        ')"' +
-
-        '>' +
-
-        'Eliminar' +
-
-        '</button>'
-
-        :
-
-        ''
-
-      )
-
-
-
-
-
-      +
-
-
-
-
-
-      '</div>' +
-
-      '</td>' +
-
-
-
-
-
-      '</tr>';
-
-    });
-
-  }
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
+// Helpers para selección rápida de switches
+window.toggleAllPermisos = function(estado) {
+  const switches = document.querySelectorAll('.permisos-grid input[type="checkbox"]');
+  switches.forEach(sw => sw.checked = Boolean(estado));
 };
 
-
-
-
-
-// ======================
-// EDITAR
-// ======================
-
-window.editarUsuario = async function(id){
-
-  try{
-
-    if(
-
-      !window.tienePermiso(
-        'usuarios',
-        'editar'
-      )
-
-    ){
-
-      notifAlert(
-        'No tiene permisos'
-      );
-
+// =====================================
+// GUARDAR USUARIO
+// =====================================
+async function guardarUsuario() {
+  try {
+    if (typeof window.tienePermiso === 'function' && !window.tienePermiso('usuarios', 'crear')) {
+      notifAlert('Acceso denegado: No cuenta con permisos de creación de usuarios.');
       return;
-
     }
 
+    const usuarioInput = document.getElementById('usuarioInput');
+    const passwordInput = document.getElementById('passwordInput');
+    const rolSelect = document.getElementById('rolUsuario');
 
-
-
-
-    const response =
-
-    await window.supabaseClient
-
-    .from('usuarios')
-
-    .select('*')
-
-    .eq(
-
-      'id',
-
-      id
-
-    )
-
-    .single();
-
-
-
-
-
-    const usuario =
-    response.data;
-
-
-
-
-
-    if(!usuario){
-
-      notifAlert(
-        'Usuario no encontrado'
-      );
-
+    if (!usuarioInput || !passwordInput || !rolSelect) {
+      notifAlert('Error en la estructura del formulario');
       return;
-
     }
 
+    const usuario = sanitizeText(usuarioInput.value.toLowerCase());
+    const password = passwordInput.value.trim();
+    const rol = rolSelect.value;
 
+    if (!usuario || !password || !rol) {
+      notifAlert('Por favor complete todos los campos requeridos');
+      return;
+    }
 
+    if (!window.supabaseClient) {
+      notifAlert('Error de conexión con la base de datos');
+      return;
+    }
 
+    // 1. Validar existencia previa
+    const { data: existente, error: errCheck } = await window.supabaseClient
+      .from('usuarios')
+      .select('id')
+      .eq('usuario', usuario)
+      .limit(1);
+
+    if (errCheck) {
+      console.error(errCheck);
+      notifAlert('Error validando disponibilidad del identificador');
+      return;
+    }
+
+    if (existente && existente.length > 0) {
+      notifAlert('El identificador de usuario ya se encuentra registrado');
+      return;
+    }
+
+    // 2. Insertar Usuario
+    const { error: errInsertUser } = await window.supabaseClient
+      .from('usuarios')
+      .insert([{
+        usuario: usuario,
+        password: password,
+        rol: rol,
+        estado: 'Activo'
+      }]);
+
+    if (errInsertUser) {
+      console.error(errInsertUser);
+      notifAlert('Error insertando las credenciales del usuario');
+      return;
+    }
+
+    // 3. Compilar Matriz de Permisos
+    const permisosPayload = MODULOS_SISTEMA.map(modulo => {
+      const getVal = (action) => {
+        const el = document.getElementById(`${modulo}${action}`);
+        return el ? el.checked : false;
+      };
+
+      return {
+        usuario: usuario,
+        modulo: modulo,
+        ver: getVal('Ver'),
+        crear: getVal('Crear'),
+        editar: getVal('Editar'),
+        eliminar: getVal('Eliminar')
+      };
+    });
+
+    const { error: errPermisos } = await window.supabaseClient
+      .from('permisos')
+      .insert(permisosPayload);
+
+    if (errPermisos) {
+      console.error(errPermisos);
+      notifAlert('Usuario creado, pero hubo un error asignando su matriz de permisos');
+    }
+
+    // 4. Auditoría / Historial
+    if (typeof guardarHistorial === 'function') {
+      await guardarHistorial(
+        'CREAR',
+        'USUARIOS',
+        `Se registró la identidad ${usuario} con rol ${rol.toUpperCase()}`
+      );
+    }
+
+    window.renderUsuarios();
+    limpiarFormulario();
+    notifAlert('Identidad y privilegios configurados exitosamente');
+
+  } catch (error) {
+    console.error('Error general en guardarUsuario:', error);
+    notifAlert('Ocurrió un error inesperado al procesar la solicitud');
+  }
+}
+
+// =====================================
+// RENDERIZAR TABLA DE USUARIOS
+// =====================================
+window.renderUsuarios = async function() {
+  const body = document.getElementById('usuariosBody');
+  if (!body) return;
+
+  body.innerHTML = `
+    <tr>
+      <td colspan="4" style="text-align: center; color: #64748b; padding: 25px;">
+        Sincronizando directorio de usuarios...
+      </td>
+    </tr>`;
+
+  try {
+    if (!window.supabaseClient) return;
+
+    const { data, error } = await window.supabaseClient
+      .from('usuarios')
+      .select('id, usuario, rol, estado')
+      .order('id', { ascending: false });
+
+    if (error) {
+      console.error(error);
+      body.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #ef4444; padding: 20px;">Error al cargar usuarios</td></tr>`;
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      body.innerHTML = `<tr><td colspan="4" style="text-align: center; color: #64748b; padding: 25px;">No hay identidades registradas en el sistema</td></tr>`;
+      return;
+    }
+
+    const puedeEditar = typeof window.tienePermiso === 'function' ? window.tienePermiso('usuarios', 'editar') : true;
+    const puedeEliminar = typeof window.tienePermiso === 'function' ? window.tienePermiso('usuarios', 'eliminar') : true;
+
+    body.innerHTML = data.map(item => {
+      const isActivo = item.estado === 'Activo';
+      const initial = (item.usuario || 'U').charAt(0).toUpperCase();
+
+      return `
+        <tr>
+          <td>
+            <div class="user-identity">
+              <div class="user-avatar-mini">${initial}</div>
+              <span>${item.usuario || '-'}</span>
+            </div>
+          </td>
+          <td>
+            <span class="role-pill">${item.rol || 'Sin Rol'}</span>
+          </td>
+          <td>
+            <span class="badge-status ${isActivo ? 'status-active' : 'status-inactive'}">
+              ● ${item.estado || 'Activo'}
+            </span>
+          </td>
+          <td class="text-right">
+            <div class="acciones-flex">
+              ${puedeEditar ? `<button class="btn-action-tech edit" onclick="editarUsuario(${item.id})">Editar</button>` : ''}
+              ${puedeEliminar ? `<button class="btn-action-tech delete" onclick="eliminarUsuario(${item.id})">Eliminar</button>` : ''}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+  } catch (error) {
+    console.error('Error renderUsuarios:', error);
+  }
+};
+
+// =====================================
+// EDITAR USUARIO
+// =====================================
+window.editarUsuario = async function(id) {
+  try {
+    if (typeof window.tienePermiso === 'function' && !window.tienePermiso('usuarios', 'editar')) {
+      notifAlert('Acceso denegado: No cuenta con permisos de edición');
+      return;
+    }
+
+    const { data: usuario, error } = await window.supabaseClient
+      .from('usuarios')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !usuario) {
+      notifAlert('No fue posible consultar los datos del usuario');
+      return;
+    }
 
     const nuevaPassword = await Notif.prompt(
-
-      'Escriba la nueva contraseña para este usuario.',
-      'Cambiar contraseña',
+      'Ingrese la nueva contraseña (o conserve la actual):',
+      'Actualizar Credenciales',
       usuario.password || ''
-
     );
-
-
-
-
-
-    if(nuevaPassword === null){
-
-      return;
-
-    }
-
-
-
-
+    if (nuevaPassword === null) return;
 
     const nuevoRol = await Notif.prompt(
-
-      'Seleccione el nuevo rol del usuario.',
-      'Cambiar rol',
+      'Seleccione el rol correspondiente:',
+      'Asignar Privilegio',
       usuario.rol,
       ['admin', 'lider', 'jefe', 'auditor', 'compras']
-
     );
-
-
-
-
-
-    if(!nuevoRol){
-
-      return;
-
-    }
-
-
-
-
+    if (!nuevoRol) return;
 
     const nuevoEstado = await Notif.prompt(
-
-      'Seleccione el nuevo estado del usuario.',
-      'Cambiar estado',
+      'Estado operativo de la cuenta:',
+      'Estado de Identidad',
       usuario.estado || 'Activo',
       ['Activo', 'Inactivo']
-
     );
+    if (!nuevoEstado) return;
 
+    const { error: errUpdate } = await window.supabaseClient
+      .from('usuarios')
+      .update({
+        password: nuevaPassword.trim(),
+        rol: nuevoRol,
+        estado: nuevoEstado
+      })
+      .eq('id', id);
 
-
-
-
-    const update =
-
-    await window.supabaseClient
-
-    .from('usuarios')
-
-    .update({
-
-      password:
-      nuevaPassword,
-
-      rol:
-      nuevoRol,
-
-      estado:
-      nuevoEstado
-
-    })
-
-    .eq(
-
-      'id',
-
-      id
-
-    );
-
-
-
-
-
-    if(update.error){
-
-      console.log(
-        update.error
-      );
-
-      notifAlert(
-        'Error actualizando usuario'
-      );
-
+    if (errUpdate) {
+      console.error(errUpdate);
+      notifAlert('Error al intentar actualizar la identidad');
       return;
-
     }
 
+    if (typeof guardarHistorial === 'function') {
+      await guardarHistorial('EDITAR', 'USUARIOS', `Se modificaron los atributos del usuario ${usuario.usuario}`);
+    }
 
+    window.renderUsuarios();
+    notifAlert('Identidad actualizada correctamente');
 
-
-
-    renderUsuarios();
-
-
-
-
-
-    notifAlert(
-      'Usuario actualizado'
-    );
-
+  } catch (error) {
+    console.error('Error editarUsuario:', error);
   }
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
 };
 
-
-
-
-
-// ======================
-// ELIMINAR
-// ======================
-
-window.eliminarUsuario = async function(id){
-
-  try{
-
-    if(
-
-      !window.tienePermiso(
-        'usuarios',
-        'eliminar'
-      )
-
-    ){
-
-      notifAlert(
-        'No tiene permisos'
-      );
-
+// =====================================
+// ELIMINAR USUARIO
+// =====================================
+window.eliminarUsuario = async function(id) {
+  try {
+    if (typeof window.tienePermiso === 'function' && !window.tienePermiso('usuarios', 'eliminar')) {
+      notifAlert('Acceso denegado: No cuenta con permisos para eliminar identidades');
       return;
-
     }
-
-
-
-
 
     const confirmar = await Notif.confirm(
-      'Esta acción no se puede deshacer.',
-      '¿Eliminar usuario?'
+      'Se revocarán todos los accesos y se eliminarán sus registros de permisos.',
+      '¿Eliminar usuario permanentemente?'
     );
+    if (!confirmar) return;
 
+    const { data: usuario } = await window.supabaseClient
+      .from('usuarios')
+      .select('usuario')
+      .eq('id', id)
+      .single();
 
+    const { error: errDelete } = await window.supabaseClient
+      .from('usuarios')
+      .delete()
+      .eq('id', id);
 
-
-
-    if(!confirmar){
-
+    if (errDelete) {
+      console.error(errDelete);
+      notifAlert('Error eliminando el usuario');
       return;
-
     }
 
+    if (usuario && usuario.usuario) {
+      // Limpiar permisos asociados
+      await window.supabaseClient
+        .from('permisos')
+        .delete()
+        .eq('usuario', usuario.usuario);
 
-
-
-
-    const consulta =
-
-    await window.supabaseClient
-
-    .from('usuarios')
-
-    .select('*')
-
-    .eq(
-
-      'id',
-
-      id
-
-    )
-
-    .single();
-
-
-
-
-
-    const usuario =
-    consulta.data;
-
-
-
-
-
-    const response =
-
-    await window.supabaseClient
-
-    .from('usuarios')
-
-    .delete()
-
-    .eq(
-
-      'id',
-
-      id
-
-    );
-
-
-
-
-
-    if(response.error){
-
-      console.log(
-        response.error
-      );
-
-      notifAlert(
-        'Error eliminando usuario'
-      );
-
-      return;
-
+      if (typeof guardarHistorial === 'function') {
+        await guardarHistorial('ELIMINAR', 'USUARIOS', `Se revocó y eliminó al usuario ${usuario.usuario}`);
+      }
     }
 
+    window.renderUsuarios();
+    notifAlert('Usuario y credenciales eliminadas del sistema');
 
-
-
-
-    await window.supabaseClient
-
-    .from('permisos')
-
-    .delete()
-
-    .eq(
-
-      'usuario',
-
-      usuario.usuario
-
-    );
-
-
-
-
-
-    renderUsuarios();
-
-
-
-
-
-    notifAlert(
-      'Usuario eliminado'
-    );
-
+  } catch (error) {
+    console.error('Error eliminarUsuario:', error);
   }
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
 };
 
+// =====================================
+// BUSCADOR EN TIEMPO REAL
+// =====================================
+const buscarInput = document.getElementById('buscarUsuario');
+if (buscarInput) {
+  buscarInput.addEventListener('input', function() {
+    const query = this.value.toLowerCase().trim();
+    const rows = document.querySelectorAll('#usuariosBody tr');
 
-
-
-
-// ======================
-// BUSCADOR
-// ======================
-
-var buscarUsuario =
-
-document.getElementById(
-  'buscarUsuario'
-);
-
-if(buscarUsuario){
-
-  buscarUsuario.onkeyup = null;
-
-  buscarUsuario.onkeyup =
-  function(){
-
-    const filtro =
-    this.value.toLowerCase();
-
-    const filas =
-
-    document.querySelectorAll(
-      '#usuariosBody tr'
-    );
-
-    filas.forEach(fila => {
-
-      fila.style.display =
-
-      fila.innerText
-      .toLowerCase()
-      .includes(filtro)
-
-      ? ''
-
-      : 'none';
-
+    rows.forEach(row => {
+      const text = row.innerText.toLowerCase();
+      row.style.display = text.includes(query) ? '' : 'none';
     });
-
-  };
-
-}
-
-
-
-// ======================
-// LIMPIAR
-// ======================
-
-function limpiarFormulario(){
-
-  document.getElementById(
-    'usuarioInput'
-  ).value = '';
-
-
-
-
-
-  document.getElementById(
-    'passwordInput'
-  ).value = '';
-
-
-
-
-
-  document.getElementById(
-    'rolUsuario'
-  ).value = 'admin';
-
-
-
-
-
-  document.querySelectorAll(
-
-    '.permisos-container input[type="checkbox"]'
-
-  )
-
-  .forEach(check => {
-
-    check.checked = false;
-
   });
-
 }
 
+// =====================================
+// LIMPIEZA DE FORMULARIO
+// =====================================
+function limpiarFormulario() {
+  const u = document.getElementById('usuarioInput');
+  const p = document.getElementById('passwordInput');
+  const r = document.getElementById('rolUsuario');
 
+  if (u) u.value = '';
+  if (p) p.value = '';
+  if (r) r.value = 'auditor';
 
+  window.toggleAllPermisos(false);
+}
 
+// Event Listeners e Inicialización
+const btnGuardar = document.getElementById('guardarUsuario');
+if (btnGuardar) {
+  btnGuardar.addEventListener('click', guardarUsuario);
+}
 
-// ======================
-// INICIO
-// ======================
-
-renderUsuarios();
+window.renderUsuarios();
